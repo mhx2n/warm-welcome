@@ -55,7 +55,7 @@ async function renderMathToImage(latex: string, display: boolean): Promise<MathP
       "position:fixed;left:-30000px;top:0;background:transparent;font-size:18px;line-height:1.2;color:#0f172a;padding:3px;";
     host.innerHTML = html;
     document.body.appendChild(host);
-    const fontReady = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+    const fontReady = (document as globalThis.Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
     if (fontReady) await fontReady.catch(() => undefined);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const target = host.firstElementChild as HTMLElement | null;
@@ -296,7 +296,7 @@ const PdfInline = ({
 }: {
   text: string;
   mathMap: Map<string, MathPiece>;
-  baseStyle: any;
+  baseStyle: Style;
   mathHeight: number;
   maxWidth: number;
 }) => {
@@ -327,7 +327,7 @@ const PdfInline = ({
   );
 };
 
-function PdfSlot({ slot, style }: { slot: Slot; style: any }) {
+function PdfSlot({ slot, style }: { slot: Slot; style: Style }) {
   if (!slot.text) return null;
   if (slot.link) return <Link src={slot.link} style={style}>{slot.text}</Link>;
   return <Text style={style}>{slot.text}</Text>;
