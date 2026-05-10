@@ -551,9 +551,9 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
       toast({ title: `PDF তৈরি হয়েছে ✅`, description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("PDF gen error", err);
-      toast({ title: "PDF তৈরিতে ত্রুটি", description: err?.message || String(err), variant: "destructive" });
+      toast({ title: "PDF তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
     } finally {
       setGenerating(false);
       setProgress("");
@@ -569,9 +569,9 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
       previewRef.current = nextUrl;
       setPreviewUrl(nextUrl);
       toast({ title: "প্রিভিউ প্রস্তুত ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("PDF preview error", err);
-      toast({ title: "প্রিভিউ তৈরিতে ত্রুটি", description: err?.message || String(err), variant: "destructive" });
+      toast({ title: "প্রিভিউ তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
     } finally {
       setPreviewing(false);
       setProgress("");
