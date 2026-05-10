@@ -259,14 +259,13 @@ const ExamPdfDoc = ({
   const pages: Pg[] = [];
   let cur: Pg = { left: [], right: [] };
   let curH = 0;
-  let onLeft = true;
   let leftH = 0, rightH = 0;
   for (const q of exam.questions) {
     const h = estH(q);
     if (curH + h > colCapacity) {
       pages.push(cur);
       cur = { left: [], right: [] };
-      curH = 0; leftH = 0; rightH = 0; onLeft = true;
+      curH = 0; leftH = 0; rightH = 0;
     }
     if (cfg.twoColumn) {
       // place in shorter column, prefer left if equal
@@ -278,7 +277,6 @@ const ExamPdfDoc = ({
       leftH += h;
     }
     curH += h;
-    onLeft = !onLeft;
   }
   if (cur.left.length || cur.right.length) pages.push(cur);
   if (pages.length === 0) pages.push({ left: [], right: [] });
