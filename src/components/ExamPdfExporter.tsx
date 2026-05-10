@@ -237,13 +237,61 @@ const ExamPdfDoc = ({
   exam, cfg, mathMap,
 }: { exam: Exam; cfg: PdfConfig; mathMap: Map<string, MathPiece> }) => {
   const marks = cfg.marksOverride.trim() || String(exam.questions.length);
-  const mid = cfg.twoColumn ? Math.ceil(exam.questions.length / 2) : exam.questions.length;
-  // simple even split per page across both columns; @react-pdf will paginate via wrap=false on each block.
-  const left = exam.questions.slice(0, mid);
-  const right = cfg.twoColumn ? exam.questions.slice(mid) : [];
+  // Pre-chunk into pages by estimated height so 2-column layout balances.
+  const estH = (q: Question) => {
+    const charsPerLine = cfg.twoColumn ? 32 : 70;
+    const lines = (s?: string) => Math.max(1, Math.ceil(((s || "").length) / charsPerLine));
+    let h = 6; // gap
+    h += lines(q.question) * 13; // question
+    const optLines = q.options.reduce((m, o) => m + lines(o), 0);
+    h += Math.ceil(optLines / 2) * 12 + 4; // 2-col options
+    if (cfg.showAnswers || (cfg.showExplanations && q.explanation)) {
+      h += 14;
+      if (cfg.showExplanations && q.explanation) h += lines(q.explanation) * 11 + 4;
+    }
+    return h;
+  };
+  const headerH = 70;
+  const footerH = 22;
+  const pageContentH = 842 - 28 * 2 - headerH - footerH; // A4 pt
+  const colCapacity = cfg.twoColumn ? pageContentH * 2 : pageContentH;
+  type Pg = { left: Question[]; right: Question[] };
+  const pages: Pg[] = [];
+  let cur: Pg = { left: [], right: [] };
+  let curH = 0;
+  let onLeft = true;
+  let leftH = 0, rightH = 0;
+  for (const q of exam.questions) {
+    const h = estH(q);
+    if (curH + h > colCapacity) {
+      pages.push(cur);
+      cur = { left: [], right: [] };
+      curH = 0; leftH = 0; rightH = 0; onLeft = true;
+    }
+    if (cfg.twoColumn) {
+      // place in shorter column, prefer left if equal
+      if (leftH <= rightH && leftH + h <= pageContentH) { cur.left.push(q); leftH += h; }
+      else if (rightH + h <= pageContentH) { cur.right.push(q); rightH += h; }
+      else { cur.left.push(q); leftH += h; }
+    } else {
+      cur.left.push(q);
+      leftH += h;
+    }
+    curH += h;
+    onLeft = !onLeft;
+  }
+  if (cur.left.length || cur.right.length) pages.push(cur);
+  if (pages.length === 0) pages.push({ left: [], right: [] });
+
+  let runningIdx = 0;
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap>
+      {pages.map((pg, pageIdx) => {
+        const leftStart = runningIdx;
+        const rightStart = runningIdx + pg.left.length;
+        runningIdx += pg.left.length + pg.right.length;
+        return (
+      <Page key={pageIdx} size="A4" style={styles.page}>
         {/* Header */}
         <View>
           {cfg.logoDataUrl ? (
@@ -261,16 +309,16 @@ const ExamPdfDoc = ({
         {/* Body — true 2-column with simulated column rule using a thin divider */}
         <View style={styles.body}>
           <View style={styles.col}>
-            {left.map((q, i) => (
-              <QBlock key={q.id || `l-${i}`} q={q} idx={i} cfg={cfg} mathMap={mathMap} />
+            {pg.left.map((q, i) => (
+              <QBlock key={q.id || `l-${pageIdx}-${i}`} q={q} idx={leftStart + i} cfg={cfg} mathMap={mathMap} />
             ))}
           </View>
           {cfg.twoColumn && (
             <>
               <View style={styles.colDivider} />
               <View style={styles.col}>
-                {right.map((q, i) => (
-                  <QBlock key={q.id || `r-${i}`} q={q} idx={mid + i} cfg={cfg} mathMap={mathMap} />
+                {pg.right.map((q, i) => (
+                  <QBlock key={q.id || `r-${pageIdx}-${i}`} q={q} idx={rightStart + i} cfg={cfg} mathMap={mathMap} />
                 ))}
               </View>
             </>
@@ -298,6 +346,8 @@ const ExamPdfDoc = ({
           </View>
         </View>
       </Page>
+        );
+      })}
     </Document>
   );
 };
