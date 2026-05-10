@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Document, Page, View, Text, Image as PdfImage, StyleSheet, Font, pdf, Link } from "@react-pdf/renderer";
+import type { Style } from "@react-pdf/types";
 import katex from "katex";
 import html2canvas from "html2canvas";
 import "katex/dist/katex.min.css";
@@ -34,6 +35,7 @@ function ensureFonts() {
 
 type MathPiece = { url: string; w: number; h: number };
 const mathCache = new Map<string, MathPiece>();
+const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 async function renderMathToImage(latex: string, display: boolean): Promise<MathPiece | null> {
   const key = `${display ? "D" : "I"}|${latex}`;
@@ -53,9 +55,8 @@ async function renderMathToImage(latex: string, display: boolean): Promise<MathP
       "position:fixed;left:-30000px;top:0;background:transparent;font-size:18px;line-height:1.2;color:#0f172a;padding:3px;";
     host.innerHTML = html;
     document.body.appendChild(host);
-    try {
-      await (document as any).fonts?.ready;
-    } catch {}
+    const fontReady = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+    if (fontReady) await fontReady.catch(() => undefined);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const target = host.firstElementChild as HTMLElement | null;
     if (!target) {
@@ -78,7 +79,7 @@ type Seg = { kind: "text"; value: string } | { kind: "math"; latex: string; disp
 function tokenize(input: string): Seg[] {
   if (!input) return [];
   const out: Seg[] = [];
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^\$\n]+?)\$)/g;
+  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(input)) !== null) {
