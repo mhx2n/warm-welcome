@@ -1,0 +1,1 @@
+ALTER TABLE public.wrong_answers ADD COLUMN IF NOT EXISTS section text NOT NULL DEFAULT '';

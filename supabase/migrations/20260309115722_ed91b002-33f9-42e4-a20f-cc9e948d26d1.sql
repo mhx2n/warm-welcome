@@ -1,0 +1,1 @@
+ALTER TABLE public.exams ADD COLUMN mandatory_subjects jsonb NOT NULL DEFAULT '[]'::jsonb;

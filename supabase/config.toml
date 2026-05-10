@@ -1,0 +1,7 @@
+project_id = "yqjoutbacgvftrimsuyu"
+
+[functions.question-helper]
+verify_jwt = false
+
+[functions.general-ai-assistant]
+verify_jwt = false
