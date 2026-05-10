@@ -268,10 +268,9 @@ const ExamPdfDoc = ({
       curH = 0; leftH = 0; rightH = 0;
     }
     if (cfg.twoColumn) {
-      // place in shorter column, prefer left if equal
-      if (leftH <= rightH && leftH + h <= pageContentH) { cur.left.push(q); leftH += h; }
-      else if (rightH + h <= pageContentH) { cur.right.push(q); rightH += h; }
-      else { cur.left.push(q); leftH += h; }
+      // Fill left column first (top-down), spill into right when left is full.
+      if (leftH + h <= pageContentH) { cur.left.push(q); leftH += h; }
+      else { cur.right.push(q); rightH += h; }
     } else {
       cur.left.push(q);
       leftH += h;
