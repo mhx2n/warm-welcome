@@ -409,6 +409,10 @@ const DEFAULT_CFG: PdfConfig = {
   renderScale: 2,
   outputFormat: "jpeg",
   presetVersion: PDF_CFG_VERSION,
+  headerFirstPageOnly: true,
+  showWatermark: true,
+  watermarkOpacity: 0.07,
+  watermarkSize: 55,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
