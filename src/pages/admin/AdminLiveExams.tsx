@@ -174,16 +174,16 @@ const AdminLiveExams = () => {
 
       // ===== Header band =====
       doc.setFillColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-      doc.rect(0, 0, W, 28, "F");
+      doc.rect(0, 0, W, 30, "F");
       doc.setTextColor(255, 255, 255);
       setF("bold");
-      doc.setFontSize(17);
-      doc.text(selected.title, 12, 12);
+      doc.setFontSize(16);
+      doc.text(selected.title || "Live Exam Report", 12, 13);
       setF("normal");
       doc.setFontSize(10);
-      doc.text("Final Result Report", 12, 19);
+      doc.text("Final Result Report", 12, 20);
       doc.setFontSize(9);
-      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 19, { align: "right" });
+      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 20, { align: "right" });
       doc.setTextColor(30, 41, 59);
 
       // ===== Exam info block =====
@@ -194,68 +194,16 @@ const AdminLiveExams = () => {
       setF("normal");
       doc.setFontSize(9.5);
       doc.setTextColor(71, 85, 105);
-      let y = 35;
+      let y = 38;
       infoLines.forEach((ln) => { doc.text(ln, 12, y); y += 4.8; });
       y += 3;
+      // suppress unused-var warnings (podium colors retained for future use)
+      void goldRgb; void silverRgb; void bronzeRgb;
 
-      // ===== Podium block (top 3) =====
-      const top3 = sorted.slice(0, 3);
-      if (top3.length > 0) {
-        const podiumY = y;
-        const podiumH = 82;
-        // Background card
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(10, podiumY, W - 20, podiumH, 3, 3, "F");
-        // Title
-        setF("bold");
-        doc.setFontSize(11);
-        doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-        doc.text("TOP PERFORMERS", W / 2, podiumY + 7, { align: "center" });
-
-        const slots: { rank: number; idx: number; medal: string; medalRgb: [number, number, number]; tileH: number }[] = [
-          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 16 },
-          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 26 },
-          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 16 },
-        ];
-        const slotW = (W - 40) / 3;
-        slots.forEach((s, sIdx) => {
-          const p = top3[s.idx];
-          if (!p) return;
-          const cx = 20 + slotW * sIdx + slotW / 2;
-          const tileBottom = podiumY + podiumH - 3;
-          const tileTop = tileBottom - s.tileH;
-          // Tile (podium bar)
-          doc.setFillColor(s.medalRgb[0], s.medalRgb[1], s.medalRgb[2]);
-          doc.roundedRect(cx - slotW / 2 + 6, tileTop, slotW - 12, s.tileH, 2, 2, "F");
-          doc.setTextColor(255, 255, 255);
-          setF("bold");
-          doc.setFontSize(s.medal === "1st" ? 13 : 10);
-          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 2, { align: "center" });
-
-          // Avatar — 1st higher up, 2nd & 3rd at the same lower level
-          const avSize = s.medal === "1st" ? 16 : 12;
-          const avX = cx - avSize / 2;
-          const avY = s.medal === "1st" ? podiumY + 12 : podiumY + 22;
-          drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", avX, avY, avSize);
-
-          // Name + score
-          doc.setTextColor(15, 23, 42);
-          setF("bold");
-          doc.setFontSize(8.5);
-          const name = (profiles[p.user_id]?.full_name || "Unknown").slice(0, 18);
-          doc.text(name, cx, avY + avSize + 4, { align: "center" });
-          setF("normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(71, 85, 105);
-          doc.text(`${p.score}/${p.max_score} • ${p.percentage.toFixed(1)}%`, cx, avY + avSize + 7.5, { align: "center" });
-        });
-        y = podiumY + podiumH + 6;
-      }
-
-      // ===== Full leaderboard table =====
+      // ===== Full leaderboard table (clean, professional, all details) =====
       autoTable(doc, {
         startY: y,
-        head: [["#", "", "Name", "Score", "Correct", "Wrong", "Percent", "Time", "Status"]],
+        head: [["#", "", "Name", "Score", "Correct", "Wrong", "Skipped", "Percent", "Time", "Status"]],
         body: sorted.map((p, i) => {
           const pr = profiles[p.user_id];
           return [
@@ -265,6 +213,7 @@ const AdminLiveExams = () => {
             `${p.score}/${p.max_score}`,
             String(p.correct),
             String(p.wrong),
+            String(p.skipped ?? 0),
             `${p.percentage.toFixed(1)}%`,
             timeText(p.time_taken_seconds || 0),
             p.status || (p.submitted_at ? "submitted" : "started"),
@@ -276,8 +225,8 @@ const AdminLiveExams = () => {
         columnStyles: {
           0: { cellWidth: 10 },
           1: { cellWidth: 10 },
-          2: { halign: "left", cellWidth: 50 },
-          8: { cellWidth: 20 },
+          2: { halign: "left", cellWidth: 44 },
+          9: { cellWidth: 20 },
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 10, right: 10, bottom: 22 },
