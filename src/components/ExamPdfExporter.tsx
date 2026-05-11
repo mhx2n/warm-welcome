@@ -16,6 +16,13 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
 // A4 @ 96dpi
 const A4_W = 794;
 const A4_H = 1123;
+// Browsers often add small margins or scale slightly when printing, even with
+// `@page margin: 0`. To guarantee no content is clipped at the edges OR pushed
+// beyond the footer line, we measure pagination against a slightly smaller
+// "usable" box. The visual page box stays full A4 so the printed PDF matches
+// the physical A4 sheet exactly.
+const SAFE_V = 28; // vertical safety (top+bottom combined)
+const SAFE_H = 12; // horizontal safety (left+right combined)
 
 let fontPromise: Promise<void> | null = null;
 async function ensureFonts() {
