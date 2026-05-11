@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ScrollToTop from "@/components/ScrollToTop";
 import AuthRefreshController from "@/components/AuthRefreshController";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -74,6 +74,8 @@ const App = () => (
               {/* Public auth pages */}
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/secure-admin-login" element={<AdminLoginPage />} />
+              <Route path="/index" element={<Navigate to="/" replace />} />
+              <Route path="/index.html" element={<Navigate to="/" replace />} />
 
               {/* Login required for entire site */}
               <Route element={<ProtectedRoute />}>
