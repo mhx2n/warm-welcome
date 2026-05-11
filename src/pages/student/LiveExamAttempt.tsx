@@ -221,7 +221,10 @@ const LiveExamAttempt = () => {
             </div>
             <div className="p-3 rounded-xl bg-success/10">
               <p className="text-xs text-muted-foreground">স্কোর</p>
-              <p className="text-2xl font-extrabold text-success">{participant?.score ?? 0}/{questions.length}</p>
+              <p className="text-2xl font-extrabold text-success">{Number(participant?.score ?? 0).toFixed(2)}/{questions.length}</p>
+              {negativeMarking > 0 && (
+                <p className="text-[10px] text-destructive mt-0.5">-{(Number(participant?.wrong || 0) * negativeMarking).toFixed(2)} ন্যাগেটিভ</p>
+              )}
             </div>
             <div className="p-3 rounded-xl bg-warning/10">
               <p className="text-xs text-muted-foreground">শতাংশ</p>
@@ -252,7 +255,7 @@ const LiveExamAttempt = () => {
                     <p className="text-sm font-semibold truncate">{pr?.full_name || "—"} {isMe && <span className="text-primary text-xs">(আপনি)</span>}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-bold">{p.score}/{p.max_score}</p>
+                    <p className="text-sm font-bold">{Number(p.score).toFixed(2)}/{p.max_score}</p>
                     <p className="text-[10px] text-muted-foreground">{Math.round(p.percentage)}%</p>
                   </div>
                 </div>
