@@ -196,7 +196,11 @@ const AdminLiveExams = () => {
         `;
       }).join("");
 
-      const negMark = examDetail && "negative_marking" in examDetail ? Number((examDetail as any).negative_marking) : null;
+      const liveOverride = (selected as any).negative_marking;
+      const negMark =
+        liveOverride !== null && liveOverride !== undefined
+          ? Number(liveOverride)
+          : (examDetail && "negative_marking" in examDetail ? Number((examDetail as any).negative_marking) : null);
       const infoBlock = `
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;padding:14px 18px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;margin:14px 0 16px;font-size:12px;">
           ${[
