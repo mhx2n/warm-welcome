@@ -449,8 +449,8 @@ const DEFAULT_CFG: PdfConfig = {
   columnGap: 16,
   questionGap: 8,
   optionGap: 3,
-  jpegQuality: 0.85,
-  renderScale: 2,
+  jpegQuality: 0.9,
+  renderScale: 3,
   outputFormat: "png",
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
