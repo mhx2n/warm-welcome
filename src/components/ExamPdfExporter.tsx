@@ -115,7 +115,7 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 
   const optionsHtml = (q.options || []).map((opt, i) => `
     <div class="opt">
-      <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)}.</span>
+      <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)})</span>
       <span class="opt-txt">${renderInline(opt)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
     </div>
   `).join("");
@@ -123,7 +123,7 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const showAnsBlock = cfg.showAnswers || (cfg.showExplanations && q.explanation);
   const ansBlock = showAnsBlock ? `
     <div class="ans-box">
-      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—")}</span></div>` : ""}
+      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> <span>${correctLbl ? `${correctLbl}) ` : ""}${renderInline(correct || "—")}</span></div>` : ""}
       ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation)}</span></div>` : ""}
     </div>` : "";
 
@@ -131,13 +131,15 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 
   return `
     <div class="q">
-      <div class="q-head">
+      <div class="q-row">
         <span class="q-num">${toBn(idx + 1)}.</span>
-        <span class="q-text">${renderInline(q.question)}</span>
+        <div class="q-content">
+          <div class="q-text">${renderInline(q.question)}</div>
+          ${qImg}
+          <div class="opts">${optionsHtml}</div>
+          ${ansBlock}
+        </div>
       </div>
-      ${qImg}
-      <div class="opts">${optionsHtml}</div>
-      ${ansBlock}
     </div>
   `;
 }
@@ -166,20 +168,22 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
     .pdf-divider{width:0.7px;background:${cfg.borderColor};align-self:stretch}
     .q{margin-bottom:${cfg.questionGap}px;page-break-inside:avoid;break-inside:avoid}
-    .q-head{display:flex;align-items:flex-start;gap:5px;font-size:${cfg.questionFontSize}px;font-weight:700;line-height:${cfg.lineHeight}}
-    .q-num{color:${cfg.primaryColor};font-weight:800;flex:0 0 auto}
-    .q-text{flex:1 1 auto;min-width:0;word-wrap:break-word}
-    .q-img{display:block;margin:4px 0 0 18px;max-width:60%;max-height:90px;object-fit:contain}
-    .opts{margin-top:3px;margin-left:18px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:${cfg.optionGap}px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
-    .opt{display:flex;align-items:flex-start;gap:4px;color:#1f2937}
-    .opt-lbl{color:${cfg.primaryColor};font-weight:700;flex:0 0 auto}
+    .q-row{display:grid;grid-template-columns:auto 1fr;column-gap:6px;align-items:start}
+    .q-num{color:${cfg.primaryColor};font-weight:800;font-size:${cfg.questionFontSize}px;line-height:${cfg.lineHeight};white-space:nowrap}
+    .q-content{min-width:0}
+    .q-text{font-size:${cfg.questionFontSize}px;font-weight:600;line-height:${cfg.lineHeight};color:#0f172a;word-wrap:break-word;overflow-wrap:break-word}
+    .q-img{display:block;margin:4px 0 0 0;max-width:80%;max-height:100px;object-fit:contain}
+    .opts{margin-top:4px;display:grid;grid-template-columns:1fr 1fr;column-gap:14px;row-gap:${cfg.optionGap}px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
+    .opt{display:flex;align-items:flex-start;gap:5px;color:#1f2937}
+    .opt-lbl{color:#1f2937;font-weight:600;flex:0 0 auto}
     .opt-txt{flex:1 1 auto;min-width:0;word-wrap:break-word}
     .opt-img{display:block;margin-top:2px;max-width:100%;max-height:48px;object-fit:contain}
-    .ans-box{margin:5px 0 0 18px;padding:6px 8px;border:0.7px solid ${cfg.borderColor};background:${cfg.answerBg};border-radius:5px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
-    .ans-line{color:${cfg.primaryColor};font-weight:600}
-    .ans-line span{font-weight:500;color:#0f172a}
-    .exp-line{margin-top:2px;color:#334155}
-    .exp-line b{color:${cfg.primaryColor}}
+    .ans-box{margin:6px 0 0 0;padding:6px 9px;border:0.7px solid ${cfg.borderColor};background:${cfg.answerBg};border-radius:6px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
+    .ans-line{color:#0f172a}
+    .ans-line b{color:${cfg.primaryColor};font-weight:700}
+    .ans-line span{font-weight:600;color:#0f172a}
+    .exp-line{margin-top:3px;color:#334155;font-weight:400}
+    .exp-line b{color:${cfg.primaryColor};font-weight:700}
     .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${Math.max(8, cfg.pageMargin / 2)}px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
     .pdf-footer .slot{flex:1;min-width:0;color:${cfg.primaryColor};font-weight:600}
     .pdf-footer .slot.center{text-align:center;flex:1.2}
