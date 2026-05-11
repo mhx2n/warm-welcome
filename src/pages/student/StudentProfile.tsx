@@ -103,11 +103,16 @@ const StudentProfile = () => {
     }
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .update({ full_name: name, phone: ph || null })
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, email: user.email, full_name: name, phone: ph || null },
+          { onConflict: "user_id" }
+        )
+        .select()
+        .single();
       if (error) throw error;
+      if (!data) throw new Error("সেভ হয়নি — অনুমতি নেই");
       await refreshProfile();
       setFullName(name);
       setPhone(ph);
@@ -158,11 +163,16 @@ const StudentProfile = () => {
       const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
       // Append a cache-buster so the new image shows immediately
       const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
-      const { error: updateError } = await supabase
+      const { data: updated, error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: publicUrl })
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, email: user.email, avatar_url: publicUrl },
+          { onConflict: "user_id" }
+        )
+        .select()
+        .single();
       if (updateError) throw updateError;
+      if (!updated) throw new Error("প্রোফাইলে সেভ হয়নি");
       await refreshProfile();
       toast({ title: "ছবি আপডেট হয়েছে ✅" });
     } catch (err: any) {
