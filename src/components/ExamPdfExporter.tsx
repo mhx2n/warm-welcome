@@ -491,6 +491,7 @@ const DEFAULT_CFG: PdfConfig = {
   showWatermark: true,
   watermarkOpacity: 0.07,
   watermarkSize: 55,
+  debugMode: false,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
