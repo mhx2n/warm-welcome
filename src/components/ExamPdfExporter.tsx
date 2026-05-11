@@ -306,6 +306,18 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
       body.appendChild(right);
     }
     page.appendChild(body);
+    // Insert a placeholder footer NOW so the flex body reserves the right
+    // height during pagination measurement. We'll swap in the real footer
+    // (with correct page-numbers) after pagination completes.
+    if (cfg.showFooter) {
+      const placeholder = document.createElement("div");
+      placeholder.innerHTML = buildFooterHTML(cfg, 1, 1);
+      const fEl = placeholder.firstElementChild;
+      if (fEl) {
+        fEl.classList.add("pdf-footer-placeholder");
+        page.appendChild(fEl);
+      }
+    }
     stage.appendChild(page);
     return { page, left, right, body };
   };
@@ -347,9 +359,12 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
     }
   }
 
-  // Append footers (need totalPages first)
+  // Replace placeholder footers with the real ones (correct page numbers)
   const total = pages.length;
   pages.forEach((p, idx) => {
+    const old = p.page.querySelector(".pdf-footer-placeholder");
+    if (old) old.remove();
+    if (!cfg.showFooter) return;
     const wrapper = document.createElement("div");
     wrapper.innerHTML = buildFooterHTML(cfg, idx + 1, total);
     if (wrapper.firstElementChild) p.page.appendChild(wrapper.firstElementChild);
