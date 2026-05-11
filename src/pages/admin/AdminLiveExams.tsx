@@ -173,7 +173,7 @@ const AdminLiveExams = () => {
             <td style="text-align:center;"><span style="display:inline-block;min-width:26px;padding:3px 8px;border-radius:999px;font-weight:700;font-size:12px;${rankBadge}">${rank}</span></td>
             <td>${avatarCell}</td>
             <td style="font-weight:600;color:#0F172A;">${esc(pr?.full_name || "Unknown")}</td>
-            <td style="text-align:center;font-weight:700;color:${theme.header};">${esc(p.score)}/${esc(p.max_score)}</td>
+            <td style="text-align:center;font-weight:700;color:${theme.header};">${Number(p.score).toFixed(2)}/${esc(p.max_score)}</td>
             <td style="text-align:center;color:#16A34A;font-weight:600;">${esc(p.correct)}</td>
             <td style="text-align:center;color:#DC2626;font-weight:600;">${esc(p.wrong)}</td>
             <td style="text-align:center;color:#64748B;">${esc(p.skipped ?? 0)}</td>
@@ -463,7 +463,7 @@ const AdminLiveExams = () => {
                           </div>
                         </td>
                         <td className="p-2">{pr?.batch_name || "—"}</td>
-                        <td className="p-2 font-semibold">{p.score}/{p.max_score}</td>
+                        <td className="p-2 font-semibold">{Number(p.score).toFixed(2)}/{p.max_score}</td>
                         <td className="p-2 text-success">{p.correct}</td>
                         <td className="p-2 text-destructive">{p.wrong}</td>
                         <td className="p-2">{p.percentage.toFixed(1)}%</td>
