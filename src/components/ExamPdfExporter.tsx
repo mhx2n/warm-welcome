@@ -81,7 +81,7 @@ interface PdfConfig {
 }
 
 // Render text with inline math (KaTeX) into an HTML string
-function renderInline(text: string, mathImages: Map<string, string>): string {
+function renderInline(text: string): string {
   if (!text) return "";
   let s = String(text);
   // escape HTML first, but preserve math regions
@@ -102,21 +102,16 @@ function renderInline(text: string, mathImages: Map<string, string>): string {
   const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   return tokens.map((t) => {
     if (t.type === "text") return escape(t.value);
-    const key = (t.display ? "D|" : "I|") + t.value;
-    const url = mathImages.get(key);
-    if (url) {
-      const cls = t.display ? "math-img math-d" : "math-img math-i";
-      return `<img class="${cls}" src="${url}" alt="" data-math="1"/>`;
-    }
     try {
-      return katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true });
+      const cls = t.display ? "math-wrap math-display" : "math-wrap math-inline";
+      return `<span class="${cls}">${katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true })}</span>`;
     } catch {
       return escape(`$${t.value}$`);
     }
   }).join("");
 }
 
-function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<string, string>): string {
+function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const correct = resolveCorrectOptionText(q);
   const correctIdx = q.options.findIndex((o) => o === correct);
   const correctLbl = correctIdx >= 0 ? (BN_OPT[correctIdx] || `${correctIdx + 1}`) : "";
@@ -124,15 +119,15 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<str
   const optionsHtml = (q.options || []).map((opt, i) => `
     <div class="opt">
       <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)}.</span>
-      <span class="opt-txt">${renderInline(opt, mi)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
+      <span class="opt-txt">${renderInline(opt)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
     </div>
   `).join("");
 
   const showAnsBlock = cfg.showAnswers || (cfg.showExplanations && q.explanation);
   const ansBlock = showAnsBlock ? `
     <div class="ans-box">
-      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—", mi)}</span></div>` : ""}
-      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation, mi)}</span></div>` : ""}
+      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—")}</span></div>` : ""}
+      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation)}</span></div>` : ""}
     </div>` : "";
 
   const qImg = cfg.showQuestionImages && q.questionImage ? `<img class="q-img" src="${q.questionImage}" alt=""/>` : "";
@@ -141,7 +136,7 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<str
     <div class="q">
       <div class="q-head">
         <span class="q-num">${toBn(idx + 1)}.</span>
-        <span class="q-text">${renderInline(q.question, mi)}</span>
+        <span class="q-text">${renderInline(q.question)}</span>
       </div>
       ${qImg}
       <div class="opts">${optionsHtml}</div>
