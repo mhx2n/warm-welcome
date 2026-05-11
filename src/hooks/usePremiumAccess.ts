@@ -45,5 +45,10 @@ export function usePremiumAccess() {
     return required.some((b) => myBatches.includes(b));
   };
 
-  return { canAccess, loading };
+  const isPremium = (examId: string) => {
+    const required = examBatches[examId];
+    return !!(required && required.length > 0);
+  };
+
+  return { canAccess, isPremium, loading };
 }
