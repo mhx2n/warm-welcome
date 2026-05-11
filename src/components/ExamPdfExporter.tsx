@@ -5,7 +5,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
-import { Download, Eye, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Settings2, X } from "lucide-react";
+import { Download, Eye, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
 import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
@@ -76,11 +76,12 @@ interface PdfConfig {
   optionGap: number;
   jpegQuality: number;
   renderScale: number;
+  outputFormat: "png" | "jpeg";
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
 // Render text with inline math (KaTeX) into an HTML string
-function renderInline(text: string): string {
+function renderInline(text: string, mathImages: Map<string, string>): string {
   if (!text) return "";
   let s = String(text);
   // escape HTML first, but preserve math regions
@@ -101,6 +102,12 @@ function renderInline(text: string): string {
   const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   return tokens.map((t) => {
     if (t.type === "text") return escape(t.value);
+    const key = (t.display ? "D|" : "I|") + t.value;
+    const url = mathImages.get(key);
+    if (url) {
+      const cls = t.display ? "math-img math-d" : "math-img math-i";
+      return `<img class="${cls}" src="${url}" alt="" data-math="1"/>`;
+    }
     try {
       return katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true });
     } catch {
@@ -109,7 +116,7 @@ function renderInline(text: string): string {
   }).join("");
 }
 
-function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
+function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<string, string>): string {
   const correct = resolveCorrectOptionText(q);
   const correctIdx = q.options.findIndex((o) => o === correct);
   const correctLbl = correctIdx >= 0 ? (BN_OPT[correctIdx] || `${correctIdx + 1}`) : "";
@@ -117,15 +124,15 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const optionsHtml = (q.options || []).map((opt, i) => `
     <div class="opt">
       <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)}.</span>
-      <span class="opt-txt">${renderInline(opt)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
+      <span class="opt-txt">${renderInline(opt, mi)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
     </div>
   `).join("");
 
   const showAnsBlock = cfg.showAnswers || (cfg.showExplanations && q.explanation);
   const ansBlock = showAnsBlock ? `
     <div class="ans-box">
-      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—")}</span></div>` : ""}
-      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation)}</span></div>` : ""}
+      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—", mi)}</span></div>` : ""}
+      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation, mi)}</span></div>` : ""}
     </div>` : "";
 
   const qImg = cfg.showQuestionImages && q.questionImage ? `<img class="q-img" src="${q.questionImage}" alt=""/>` : "";
@@ -134,7 +141,7 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
     <div class="q">
       <div class="q-head">
         <span class="q-num">${toBn(idx + 1)}.</span>
-        <span class="q-text">${renderInline(q.question)}</span>
+        <span class="q-text">${renderInline(q.question, mi)}</span>
       </div>
       ${qImg}
       <div class="opts">${optionsHtml}</div>
@@ -190,6 +197,8 @@ function pageStyles(cfg: PdfConfig): string {
     .katex{font-size:1em !important;line-height:1.2 !important}
     .katex-display{margin:.25em 0 !important;text-align:left}
     .katex-display>.katex{text-align:left}
+    .math-img{display:inline-block;vertical-align:-0.25em;max-width:100%}
+    .math-img.math-d{display:block;margin:.25em 0;vertical-align:middle}
   `;
 }
 
@@ -232,8 +241,71 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
+function collectMath(exam: Exam): { value: string; display: boolean }[] {
+  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
+  const seen = new Set<string>();
+  const out: { value: string; display: boolean }[] = [];
+  const scan = (s: string | undefined | null) => {
+    if (!s) return;
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(s)) !== null) {
+      let value = ""; let display = false;
+      if (m[2] != null) { value = m[2]; display = true; }
+      else if (m[4] != null) { value = m[4]; display = true; }
+      else if (m[6] != null) { value = m[6]; display = false; }
+      else if (m[8] != null) { value = m[8]; display = false; }
+      const key = (display ? "D|" : "I|") + value;
+      if (!seen.has(key)) { seen.add(key); out.push({ value, display }); }
+    }
+  };
+  for (const q of exam.questions || []) {
+    scan(q.question);
+    scan(q.explanation);
+    (q.options || []).forEach((o) => scan(o));
+  }
+  return out;
+}
+
+const mathCache = new Map<string, string>();
+
+async function prerenderMathImages(exam: Exam, onProgress?: (msg: string) => void): Promise<Map<string, string>> {
+  const items = collectMath(exam);
+  const result = new Map<string, string>();
+  if (!items.length) return result;
+  const stage = document.createElement("div");
+  stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;background:#fff;padding:8px;font-family:'Noto Sans Bengali','Inter',sans-serif;";
+  document.body.appendChild(stage);
+  let done = 0;
+  for (const it of items) {
+    const cacheKey = (it.display ? "D|" : "I|") + it.value;
+    if (mathCache.has(cacheKey)) {
+      result.set(cacheKey, mathCache.get(cacheKey)!);
+      done++; continue;
+    }
+    try {
+      const wrap = document.createElement("div");
+      wrap.style.cssText = "display:inline-block;padding:2px 4px;background:#ffffff;color:#0f172a;font-size:18px;line-height:1.25;";
+      wrap.innerHTML = katex.renderToString(it.value, { displayMode: it.display, throwOnError: false, output: "html", strict: false, trust: true });
+      stage.appendChild(wrap);
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const canvas = await html2canvas(wrap, { scale: 4, backgroundColor: null, useCORS: true, logging: false });
+      const url = canvas.toDataURL("image/png");
+      result.set(cacheKey, url);
+      mathCache.set(cacheKey, url);
+      stage.removeChild(wrap);
+    } catch { /* skip */ }
+    done++;
+    if (done % 4 === 0) onProgress?.(`ম্যাথ রেন্ডার ${toBn(done)}/${toBn(items.length)}...`);
+  }
+  stage.remove();
+  return result;
+}
+
 async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
   await ensureFonts();
+  onProgress?.("ম্যাথ প্রি-রেন্ডার...");
+  const mathImages = await prerenderMathImages(exam, onProgress);
   onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
 
   // Off-screen render container
@@ -279,7 +351,7 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   for (let i = 0; i < exam.questions.length; i++) {
     const q = exam.questions[i];
     const tmp = document.createElement("div");
-    tmp.innerHTML = buildQuestionHTML(q, i, cfg);
+    tmp.innerHTML = buildQuestionHTML(q, i, cfg, mathImages);
     const node = tmp.firstElementChild as HTMLElement;
     curCol.appendChild(node);
     if (!fits(curCol)) {
@@ -336,10 +408,12 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
       logging: false,
       windowWidth: A4_W,
       windowHeight: A4_H,
+      imageTimeout: 0,
     });
-    const dataUrl = canvas.toDataURL("image/jpeg", cfg.jpegQuality);
+    const isPng = cfg.outputFormat === "png";
+    const dataUrl = isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", cfg.jpegQuality);
     if (i > 0) pdf.addPage("a4", "portrait");
-    pdf.addImage(dataUrl, "JPEG", 0, 0, pdfW, pdfH, undefined, "FAST");
+    pdf.addImage(dataUrl, isPng ? "PNG" : "JPEG", 0, 0, pdfW, pdfH, undefined, isPng ? "SLOW" : "FAST");
     // also add invisible link annotations for footer slots if needed - skipped (raster)
   }
 
