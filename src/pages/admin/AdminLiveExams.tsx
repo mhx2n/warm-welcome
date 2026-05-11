@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Radio, Trash2, Download, Trophy, X, Crown } from "lucide-react";
+import { Plus, Radio, Trash2, Download, Trophy, X, Crown, ImageDown } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
@@ -121,6 +121,10 @@ const AdminLiveExams = () => {
       const theme = resolveReportTheme(reportCfg);
       const headerRgb = hexToRgb(theme.header);
       const accentRgb = hexToRgb(theme.accent);
+      const podium = reportCfg.podiumColors || { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" };
+      const goldRgb = hexToRgb(podium.gold);
+      const silverRgb = hexToRgb(podium.silver);
+      const bronzeRgb = hexToRgb(podium.bronze);
 
       // ===== Avatar pre-fetch (top participants only — keep PDF light) =====
       const avatarMap: Record<string, string> = {};
@@ -204,9 +208,9 @@ const AdminLiveExams = () => {
         doc.text("TOP PERFORMERS", W / 2, podiumY + 6.5, { align: "center" });
 
         const slots: { rank: number; idx: number; medal: string; medalRgb: [number, number, number]; tileH: number }[] = [
-          { rank: 2, idx: 1, medal: "2nd", medalRgb: [148, 163, 184], tileH: 22 },
-          { rank: 1, idx: 0, medal: "1st", medalRgb: [234, 179, 8], tileH: 30 },
-          { rank: 3, idx: 2, medal: "3rd", medalRgb: [202, 138, 4], tileH: 18 },
+          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 22 },
+          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 30 },
+          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 18 },
         ];
         const slotW = (W - 40) / 3;
         slots.forEach((s, sIdx) => {
