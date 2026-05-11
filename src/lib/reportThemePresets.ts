@@ -19,6 +19,8 @@ export const defaultReportSettings: ReportSettings = {
   themeId: "blue",
   footerText: "Target — Smart Exam Platform",
   footerLinks: [],
+  podiumColors: { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" },
+  showFullLeaderboardToStudents: true,
 };
 
 export function hexToRgb(hex: string): [number, number, number] {

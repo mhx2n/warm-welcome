@@ -71,6 +71,12 @@ export interface ReportSettings {
   customAccent?: string; // hex
   footerText: string;
   footerLinks: { label: string; url: string }[];
+  // Podium tile colors for top-3 leaderboard rendering (hex)
+  podiumColors?: { gold: string; silver: string; bronze: string };
+  // Custom logo to replace the Radio icon on live exam cards (data URL)
+  liveExamLogo?: string;
+  // Whether students see full leaderboard list (top-3 always visible)
+  showFullLeaderboardToStudents?: boolean;
 }
 
 export interface Exam {

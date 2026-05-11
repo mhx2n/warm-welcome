@@ -4,7 +4,7 @@ import { SiteSettings, ThemeColors } from "@/lib/types";
 import { themePresets, applyThemeColors } from "@/lib/themePresets";
 import { reportThemePresets, defaultReportSettings } from "@/lib/reportThemePresets";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Palette, Check, Sliders, FileText, Plus, Trash2, Link2 } from "lucide-react";
+import { Save, Palette, Check, Sliders, FileText, Plus, Trash2, Link2, Image as ImageIcon, Eye, EyeOff, Trophy } from "lucide-react";
 import { getTheme } from "@/lib/theme";
 
 const colorFields: { key: keyof ThemeColors; label: string }[] = [
@@ -116,6 +116,20 @@ const AdminThemeSettings = () => {
   };
   const addFooterLink = () => updateReport({ footerLinks: [...reportSettings.footerLinks, { label: "", url: "" }] });
   const removeFooterLink = (idx: number) => updateReport({ footerLinks: reportSettings.footerLinks.filter((_, i) => i !== idx) });
+  const podium = reportSettings.podiumColors || { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" };
+  const updatePodium = (key: "gold" | "silver" | "bronze", value: string) =>
+    updateReport({ podiumColors: { ...podium, [key]: value } });
+
+  const onLogoUpload = (file: File | null) => {
+    if (!file) return;
+    if (file.size > 600 * 1024) {
+      toast({ title: "ছবি বড় (সর্বোচ্চ 600KB)", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => updateReport({ liveExamLogo: reader.result as string });
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="animate-fade-in max-w-2xl mx-auto">
@@ -292,6 +306,88 @@ const AdminThemeSettings = () => {
           {reportSettings.footerLinks.length === 0 && (
             <p className="text-[11px] text-muted-foreground text-center py-2">এখনও কোনো লিংক যোগ করা হয়নি।</p>
           )}
+        </div>
+      </div>
+
+      <div className="glass-card-static p-5 space-y-4 mb-6">
+        <h2 className="text-sm font-bold flex items-center gap-2"><Trophy size={16} className="text-warning" /> লিডারবোর্ড ও লাইভ পরীক্ষা</h2>
+
+        <div>
+          <label className="text-xs font-semibold mb-2 block">পডিয়াম কালার (১ম / ২য় / ৩য়)</label>
+          <div className="grid grid-cols-3 gap-3">
+            {([
+              { key: "gold" as const, label: "১ম স্থান" },
+              { key: "silver" as const, label: "২য় স্থান" },
+              { key: "bronze" as const, label: "৩য় স্থান" },
+            ]).map((m) => (
+              <div key={m.key} className="space-y-1">
+                <label className="text-[11px] font-medium">{m.label}</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={podium[m.key]} onChange={(e) => updatePodium(m.key, e.target.value)}
+                    className="w-10 h-10 rounded-lg border border-border cursor-pointer" />
+                  <span className="text-[10px] text-muted-foreground font-mono">{podium[m.key]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Live preview */}
+          <div className="mt-3 flex items-end justify-center gap-2 p-3 rounded-xl bg-muted/30">
+            <div className="flex-1 text-center">
+              <p className="text-[10px] text-muted-foreground mb-1">২য়</p>
+              <div className="h-12 rounded-t-lg" style={{ background: `linear-gradient(to bottom, ${podium.silver}cc, ${podium.silver})` }} />
+            </div>
+            <div className="flex-1 text-center">
+              <p className="text-[10px] text-muted-foreground mb-1">১ম</p>
+              <div className="h-16 rounded-t-lg" style={{ background: `linear-gradient(to bottom, ${podium.gold}cc, ${podium.gold})` }} />
+            </div>
+            <div className="flex-1 text-center">
+              <p className="text-[10px] text-muted-foreground mb-1">৩য়</p>
+              <div className="h-10 rounded-t-lg" style={{ background: `linear-gradient(to bottom, ${podium.bronze}cc, ${podium.bronze})` }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-border space-y-2">
+          <label className="text-xs font-semibold flex items-center gap-1.5"><ImageIcon size={12} /> লাইভ পরীক্ষার কাস্টম লোগো</label>
+          <p className="text-[11px] text-muted-foreground">স্টুডেন্ট পোর্টালে লাইভ পরীক্ষার কার্ডে ডিফল্ট আইকনের জায়গায় এই লোগো দেখাবে।</p>
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden shrink-0">
+              {reportSettings.liveExamLogo
+                ? <img src={reportSettings.liveExamLogo} alt="logo" className="w-full h-full object-cover" />
+                : <ImageIcon size={20} className="text-muted-foreground" />}
+            </div>
+            <div className="flex-1 flex flex-wrap gap-2">
+              <label className="px-3 py-2 rounded-lg bg-primary/10 text-primary text-xs font-semibold cursor-pointer">
+                আপলোড
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={(e) => onLogoUpload(e.target.files?.[0] || null)} />
+              </label>
+              {reportSettings.liveExamLogo && (
+                <button onClick={() => updateReport({ liveExamLogo: undefined })}
+                  className="px-3 py-2 rounded-lg bg-destructive/10 text-destructive text-xs font-semibold inline-flex items-center gap-1">
+                  <Trash2 size={12} /> সরান
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-3 border-t border-border">
+          <button onClick={() => updateReport({ showFullLeaderboardToStudents: !reportSettings.showFullLeaderboardToStudents })}
+            className="w-full flex items-center justify-between gap-3 p-3 rounded-xl glass-strong">
+            <div className="text-left">
+              <p className="text-xs font-bold flex items-center gap-1.5">
+                {reportSettings.showFullLeaderboardToStudents ? <Eye size={12} /> : <EyeOff size={12} />}
+                স্টুডেন্টদের পূর্ণ লিডারবোর্ড দেখান
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                বন্ধ থাকলে শুধু টপ ৩ পডিয়াম দেখাবে — চালু করলে সবার র‍্যাঙ্কিং স্ক্রল করে দেখা যাবে
+              </p>
+            </div>
+            <div className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${reportSettings.showFullLeaderboardToStudents ? "bg-primary" : "bg-muted"}`}>
+              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${reportSettings.showFullLeaderboardToStudents ? "left-[22px]" : "left-0.5"}`} />
+            </div>
+          </button>
         </div>
       </div>
 
