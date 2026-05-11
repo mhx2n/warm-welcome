@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Lock, X, Medal, FileText, Minus } from "lucide-react";
+import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Lock, LockOpen, X, Medal, FileText, Minus } from "lucide-react";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { getLabel } from "@/lib/labels";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
@@ -62,7 +62,7 @@ const StudentLiveExams = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { canAccess, loading: accessLoading } = usePremiumAccess();
+  const { canAccess, isPremium, loading: accessLoading } = usePremiumAccess();
   const { data: siteSettings } = useSiteSettings();
   const reportCfg = siteSettings?.reportSettings || defaultReportSettings;
   const [exams, setExams] = useState<LiveExam[]>([]);
@@ -219,7 +219,7 @@ const StudentLiveExams = () => {
           </h2>
           <div className="grid gap-3 md:grid-cols-2">
             {liveNow.map((exam) => (
-              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
+              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} premium={isPremium(exam.exam_id)} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
             ))}
           </div>
         </div>
@@ -240,7 +240,7 @@ const StudentLiveExams = () => {
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {upcoming.map((exam) => (
-              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
+              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} premium={isPremium(exam.exam_id)} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
             ))}
           </div>
         )}
@@ -291,12 +291,14 @@ function ExamCardLive({
   exam,
   meta,
   logo,
+  premium,
   joining,
   onJoin,
 }: {
   exam: LiveExam;
   meta?: ExamMeta;
   logo?: string;
+  premium: boolean;
   joining: boolean;
   onJoin: () => void;
 }) {
@@ -333,8 +335,8 @@ function ExamCardLive({
         <div className="bg-muted/40 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
           <Minus size={12} className="text-destructive" /> ন্যাগেটিভ: {meta ? meta.negative_marking : "—"}
         </div>
-        <div className="rounded-lg px-2.5 py-2 flex items-center justify-center bg-primary/10 text-primary">
-          <Lock size={14} />
+        <div className={`rounded-lg px-2.5 py-2 flex items-center justify-center gap-1.5 ${premium ? "bg-warning/15 text-warning" : "bg-success/15 text-success"}`}>
+          {premium ? <Lock size={14} /> : <LockOpen size={14} />}
         </div>
       </div>
 
