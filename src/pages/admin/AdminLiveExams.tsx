@@ -3,10 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Radio, Trash2, Download, Trophy, X, Crown, ImageDown } from "lucide-react";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
+import notoBengaliUrl from "@/assets/NotoSansBengali-Regular.ttf";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
 import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/reportThemePresets";
-import { ensureBanglaFont, BANGLA_FONT } from "@/lib/pdfBanglaFont";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
 interface ExamDetailRow { id: string; title: string; question_count: number; duration: number; negative_marking: number; }
@@ -111,13 +111,6 @@ const AdminLiveExams = () => {
   const exportLeaderboardPDF = () => {
     if (!selected) return;
     (async () => {
-      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape", compress: true });
-      // Register Bangla font (falls back to helvetica on network failure)
-      const banglaOk = await ensureBanglaFont(doc);
-      const FONT = banglaOk ? BANGLA_FONT : "helvetica";
-      const setF = (_style: "normal" | "bold" = "normal") => doc.setFont(FONT, "normal");
-      const W = doc.internal.pageSize.getWidth();
-      const H = doc.internal.pageSize.getHeight();
       const sorted = [...parts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
       const submitted = parts.filter((p) => p.status === "submitted" || p.submitted_at);
       const fmt = (d: string) => new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -126,18 +119,15 @@ const AdminLiveExams = () => {
         const ss = seconds % 60;
         return `${mm}:${String(ss).padStart(2, "0")}`;
       };
+      const esc = (s: any) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
-      // ===== Theme + footer config =====
       const reportCfg = siteSettings?.reportSettings || defaultReportSettings;
       const theme = resolveReportTheme(reportCfg);
-      const headerRgb = hexToRgb(theme.header);
-      const accentRgb = hexToRgb(theme.accent);
       const examDetail = selectedExamDetail || exams.find((e) => e.id === selected.exam_id);
 
-      // ===== Avatar pre-fetch (top participants only — keep PDF light) =====
+      // Pre-fetch avatars as data URLs so html2canvas can render without CORS issues
       const avatarMap: Record<string, string> = {};
-      const avatarUsers = sorted.slice(0, 60); // limit
-      await Promise.all(avatarUsers.map(async (p) => {
+      await Promise.all(sorted.slice(0, 200).map(async (p) => {
         const url = profiles[p.user_id]?.avatar_url;
         if (!url) return;
         try {
@@ -154,156 +144,170 @@ const AdminLiveExams = () => {
         } catch { /* ignore */ }
       }));
 
-      const drawAvatar = (uid: string, name: string, x: number, y: number, size: number) => {
-        const dataUrl = avatarMap[uid];
-        if (dataUrl) {
-          try {
-            const fmt = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-            // jsPDF clipping: round mask via circle then addImage
-            doc.saveGraphicsState?.();
-            doc.addImage(dataUrl, fmt, x, y, size, size, undefined, "FAST");
-            doc.restoreGraphicsState?.();
-            return;
-          } catch { /* fall through */ }
-        }
-        // Initial-circle fallback
-        doc.setFillColor(accentRgb[0], accentRgb[1], accentRgb[2]);
-        doc.circle(x + size / 2, y + size / 2, size / 2, "F");
-        doc.setTextColor(255, 255, 255);
-        try { doc.setFont(BANGLA_FONT, "bold"); } catch { doc.setFont("helvetica", "bold"); }
-        doc.setFontSize(size * 1.6);
-        doc.text((name || "U")[0].toUpperCase(), x + size / 2, y + size / 2 + size * 0.18, { align: "center" });
-      };
-
-      // ===== Header band =====
-      doc.setFillColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-      doc.rect(0, 0, W, 34, "F");
-      doc.setTextColor(255, 255, 255);
-      setF("bold");
-      doc.setFontSize(15);
-      doc.text(selected.title || "Live Exam Report", 12, 13, { maxWidth: W - 24 });
-      setF("normal");
-      doc.setFontSize(10);
-      doc.text("Final Result Report", 12, 21);
-      doc.setFontSize(9);
-      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 29, { align: "right" });
-      doc.setTextColor(30, 41, 59);
-
-      // ===== Exam info block =====
-      const infoRows = [
-        ["Exam", examDetail?.title || selected.title || "—"],
-        ["Live title", selected.title || "—"],
-        ["Time", `${fmt(selected.start_time)}  →  ${fmt(selected.end_time)}`],
-        ["Duration", `${selected.duration || examDetail?.duration || 0} min`],
-        ["Questions", `${examDetail?.question_count ?? "—"}`],
-        ["Negative mark", `${"negative_marking" in (examDetail || {}) ? Number((examDetail as any).negative_marking) : "—"}`],
-        ["Participants", `${parts.length}`],
-        ["Submitted", `${submitted.length}`],
-      ];
-      autoTable(doc, {
-        startY: 42,
-        body: infoRows,
-        theme: "plain",
-        styles: { font: FONT, fontStyle: "normal", fontSize: 9.5, cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 }, textColor: [51, 65, 85], overflow: "linebreak" },
-        columnStyles: { 0: { cellWidth: 34, fontStyle: "normal", textColor: [15, 23, 42] }, 1: { cellWidth: W - 58 } },
-        margin: { left: 12, right: 12 },
-      });
-      let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : 74;
-
-      // ===== Full leaderboard table (clean, professional, all details) =====
-      autoTable(doc, {
-        startY: y,
-        head: [["#", "Photo", "Name", "Phone", "Batch", "Score", "Correct", "Wrong", "Skipped", "%", "Time", "Status"]],
-        body: sorted.map((p, i) => {
-          const pr = profiles[p.user_id];
-          return [
-            String(i + 1),
-            "", // avatar cell
-            pr?.full_name || "Unknown",
-            pr?.phone || "—",
-            pr?.batch_name || "—",
-            `${p.score}/${p.max_score}`,
-            String(p.correct),
-            String(p.wrong),
-            String(p.skipped ?? 0),
-            `${p.percentage.toFixed(1)}%`,
-            timeText(p.time_taken_seconds || 0),
-            p.status || (p.submitted_at ? "submitted" : "started"),
-          ];
-        }),
-        styles: { font: FONT, fontStyle: "normal", fontSize: 8.8, cellPadding: 1.8, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 8.5 },
-        headStyles: { font: FONT, fontStyle: "normal", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
-        bodyStyles: { font: FONT, fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
-        columnStyles: {
-          0: { cellWidth: 8 },
-          1: { cellWidth: 12 },
-          2: { halign: "left", cellWidth: 48 },
-          3: { cellWidth: 26 },
-          4: { cellWidth: 28 },
-          5: { cellWidth: 22 },
-          6: { cellWidth: 18 },
-          7: { cellWidth: 18 },
-          8: { cellWidth: 18 },
-          9: { cellWidth: 18 },
-          10: { cellWidth: 20 },
-          11: { cellWidth: 24 },
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 10, right: 10, bottom: 22 },
-        didDrawCell: (data) => {
-          if (data.section === "body" && data.column.index === 1) {
-            const p = sorted[data.row.index];
-            if (!p) return;
-            const size = Math.min(data.cell.height - 1.5, 7);
-            const x = data.cell.x + (data.cell.width - size) / 2;
-            const cy = data.cell.y + (data.cell.height - size) / 2;
-            drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", x, cy, size);
-          }
-        },
-      });
-
-      // ===== Footer (every page) =====
-      const pages = doc.getNumberOfPages();
-      for (let pn = 1; pn <= pages; pn++) {
-        doc.setPage(pn);
-        // Footer divider
-        doc.setDrawColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-        doc.setLineWidth(0.4);
-        doc.line(10, H - 14, W - 10, H - 14);
-
-        setF("bold");
-        doc.setFontSize(9);
-        doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-        doc.text(reportCfg.footerText || "", 12, H - 9);
-
-        // Links — center-spread
-        if (reportCfg.footerLinks?.length) {
-          setF("normal");
-          doc.setFontSize(8.5);
-          doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
-          let lx = 12;
-          const ly = H - 4;
-          reportCfg.footerLinks.forEach((lnk, idx) => {
-            const text = lnk.label || lnk.url;
-            if (!text || !lnk.url) return;
-            const w = doc.getTextWidth(text);
-            doc.textWithLink(text, lx, ly, { url: lnk.url });
-            lx += w + 8;
-            if (idx < reportCfg.footerLinks.length - 1) {
-              doc.setTextColor(148, 163, 184);
-              doc.text("•", lx - 4, ly);
-              doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
-            }
-          });
-        }
-
-        setF("normal");
-        doc.setFontSize(8.5);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`Page ${pn} / ${pages}`, W - 12, H - 9, { align: "right" });
+      // Inject @font-face once so the offscreen DOM uses Noto Sans Bengali
+      const FONT_STYLE_ID = "__noto_bengali_pdf_font";
+      if (!document.getElementById(FONT_STYLE_ID)) {
+        const styleEl = document.createElement("style");
+        styleEl.id = FONT_STYLE_ID;
+        styleEl.textContent = `@font-face{font-family:'NotoBengaliPDF';src:url('${notoBengaliUrl}') format('truetype');font-display:block;}`;
+        document.head.appendChild(styleEl);
+        // small wait to ensure font is loaded
+        try { await (document as any).fonts?.load("16px 'NotoBengaliPDF'"); } catch { /* noop */ }
       }
 
-      doc.save(`report-${selected.title.replace(/[\\/:*?"<>|]+/g, "_")}.pdf`);
+      const rows = sorted.map((p, i) => {
+        const pr = profiles[p.user_id];
+        const av = avatarMap[p.user_id];
+        const initial = esc((pr?.full_name || "U")[0].toUpperCase());
+        const avatarCell = av
+          ? `<img src="${av}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;display:block;margin:0 auto;" />`
+          : `<div style="width:28px;height:28px;border-radius:50%;background:${theme.accent};color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;margin:0 auto;">${initial}</div>`;
+        const rank = i + 1;
+        const rankBadge =
+          rank === 1 ? `background:#FEF3C7;color:#92400E;` :
+          rank === 2 ? `background:#E5E7EB;color:#374151;` :
+          rank === 3 ? `background:#FED7AA;color:#9A3412;` :
+          `background:#F1F5F9;color:#334155;`;
+        return `
+          <tr>
+            <td style="text-align:center;"><span style="display:inline-block;min-width:26px;padding:3px 8px;border-radius:999px;font-weight:700;font-size:12px;${rankBadge}">${rank}</span></td>
+            <td>${avatarCell}</td>
+            <td style="font-weight:600;color:#0F172A;">${esc(pr?.full_name || "Unknown")}</td>
+            <td>${esc(pr?.phone || "—")}</td>
+            <td>${esc(pr?.batch_name || "—")}</td>
+            <td style="text-align:center;font-weight:700;color:${theme.header};">${esc(p.score)}/${esc(p.max_score)}</td>
+            <td style="text-align:center;color:#16A34A;font-weight:600;">${esc(p.correct)}</td>
+            <td style="text-align:center;color:#DC2626;font-weight:600;">${esc(p.wrong)}</td>
+            <td style="text-align:center;color:#64748B;">${esc(p.skipped ?? 0)}</td>
+            <td style="text-align:center;font-weight:600;">${p.percentage.toFixed(1)}%</td>
+            <td style="text-align:center;color:#475569;">${timeText(p.time_taken_seconds || 0)}</td>
+            <td style="text-align:center;font-size:11px;color:#475569;text-transform:capitalize;">${esc(p.status || (p.submitted_at ? "submitted" : "started"))}</td>
+          </tr>
+        `;
+      }).join("");
+
+      const negMark = examDetail && "negative_marking" in examDetail ? Number((examDetail as any).negative_marking) : null;
+      const infoBlock = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px 18px;padding:14px 18px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;margin:14px 0 16px;font-size:12px;">
+          ${[
+            ["Exam", examDetail?.title || selected.title || "—"],
+            ["Live Title", selected.title || "—"],
+            ["Duration", `${selected.duration || examDetail?.duration || 0} min`],
+            ["Questions", `${examDetail?.question_count ?? "—"}`],
+            ["Negative Mark", negMark === null ? "—" : String(negMark)],
+            ["Participants", String(parts.length)],
+            ["Submitted", String(submitted.length)],
+            ["Window", `${fmt(selected.start_time)} → ${fmt(selected.end_time)}`],
+          ].map(([k, v]) => `
+            <div>
+              <div style="font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#64748B;font-weight:600;">${esc(k)}</div>
+              <div style="font-size:12.5px;color:#0F172A;font-weight:600;margin-top:2px;">${esc(v)}</div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+
+      const footerLinks = (reportCfg.footerLinks || [])
+        .filter((l) => l.label && l.url)
+        .map((l) => `<a href="${esc(l.url)}" style="color:${theme.accent};text-decoration:none;margin:0 6px;">${esc(l.label || l.url)}</a>`)
+        .join('<span style="color:#CBD5E1;">•</span>');
+
+      // Build offscreen container
+      const container = document.createElement("div");
+      container.style.cssText = `position:fixed;left:-99999px;top:0;width:1280px;background:#fff;font-family:'NotoBengaliPDF','Noto Sans Bengali','Hind Siliguri',system-ui,-apple-system,'Segoe UI',sans-serif;color:#0F172A;`;
+      container.innerHTML = `
+        <div style="padding:0;">
+          <div style="background:linear-gradient(135deg, ${theme.header}, ${theme.accent});color:#fff;padding:24px 28px;">
+            <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.85;font-weight:600;">Final Result Report</div>
+            <div style="font-size:24px;font-weight:800;margin-top:4px;line-height:1.2;">${esc(selected.title || "Live Exam Report")}</div>
+            <div style="font-size:11.5px;margin-top:6px;opacity:.9;">Generated: ${esc(new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }))}</div>
+          </div>
+          <div style="padding:18px 24px 28px;">
+            ${infoBlock}
+            <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
+              <thead>
+                <tr style="background:${theme.header};color:#fff;">
+                  ${["#","Photo","Name","Phone","Batch","Score","Correct","Wrong","Skipped","%","Time","Status"]
+                    .map((h, idx) => `<th style="padding:10px 8px;text-align:${idx===2?'left':'center'};font-weight:600;font-size:11.5px;letter-spacing:.03em;">${h}</th>`).join("")}
+                </tr>
+              </thead>
+              <tbody>
+                ${rows || `<tr><td colspan="12" style="text-align:center;padding:30px;color:#94A3B8;">No participants yet</td></tr>`}
+              </tbody>
+            </table>
+            <div style="margin-top:22px;padding-top:14px;border-top:2px solid ${theme.header};display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#475569;">
+              <div style="font-weight:700;color:${theme.header};">${esc(reportCfg.footerText || "")}</div>
+              <div>${footerLinks}</div>
+            </div>
+          </div>
+        </div>
+      `;
+      // Apply consistent cell styling
+      container.querySelectorAll("tbody td").forEach((td) => {
+        (td as HTMLElement).style.padding = "9px 8px";
+        (td as HTMLElement).style.borderBottom = "1px solid #F1F5F9";
+        (td as HTMLElement).style.fontSize = "12px";
+      });
+      container.querySelectorAll("tbody tr:nth-child(even)").forEach((tr) => {
+        (tr as HTMLElement).style.background = "#F8FAFC";
+      });
+      document.body.appendChild(container);
+
+      try {
+        // Wait one paint cycle so fonts/images settle
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+        const canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          windowWidth: 1280,
+        });
+
+        const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const imgW = pageW;
+        const imgH = (canvas.height * imgW) / canvas.width;
+
+        if (imgH <= pageH) {
+          doc.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, imgW, imgH);
+        } else {
+          // Slice the canvas vertically across multiple pages
+          const pageHeightPx = (pageH * canvas.width) / pageW;
+          let renderedY = 0;
+          let pageIndex = 0;
+          while (renderedY < canvas.height) {
+            const sliceH = Math.min(pageHeightPx, canvas.height - renderedY);
+            const sliceCanvas = document.createElement("canvas");
+            sliceCanvas.width = canvas.width;
+            sliceCanvas.height = sliceH;
+            const ctx = sliceCanvas.getContext("2d")!;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+            ctx.drawImage(canvas, 0, renderedY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+            const sliceImgH = (sliceH * imgW) / canvas.width;
+            if (pageIndex > 0) doc.addPage();
+            doc.addImage(sliceCanvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, imgW, sliceImgH);
+            renderedY += sliceH;
+            pageIndex++;
+          }
+        }
+
+        // Page numbers
+        const total = doc.getNumberOfPages();
+        for (let pn = 1; pn <= total; pn++) {
+          doc.setPage(pn);
+          doc.setFontSize(8.5);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`Page ${pn} / ${total}`, pageW - 8, pageH - 4, { align: "right" });
+        }
+
+        doc.save(`report-${selected.title.replace(/[\\/:*?"<>|]+/g, "_")}.pdf`);
+      } finally {
+        document.body.removeChild(container);
+      }
     })();
   };
 
