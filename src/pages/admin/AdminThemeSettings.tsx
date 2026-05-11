@@ -208,6 +208,93 @@ const AdminThemeSettings = () => {
         )}
       </div>
 
+      <div className="glass-card-static p-5 space-y-4 mb-6">
+        <h2 className="text-sm font-bold flex items-center gap-2"><FileText size={16} className="text-primary" /> PDF রিপোর্ট থিম ও ফুটার</h2>
+        <p className="text-xs text-muted-foreground">লাইভ পরীক্ষার লিডারবোর্ড PDF এ এই থিম ও ফুটার ব্যবহৃত হবে।</p>
+
+        <div>
+          <label className="text-xs font-semibold mb-2 block">প্রিসেট থিম</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {reportThemePresets.map((p) => {
+              const active = reportSettings.themeId === p.id;
+              return (
+                <button key={p.id} onClick={() => updateReport({ themeId: p.id })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${active ? "border-primary scale-[1.02]" : "border-border hover:border-primary/40"}`}>
+                  <div className="flex gap-1.5 mb-1.5">
+                    <div className="w-5 h-5 rounded-md border" style={{ backgroundColor: p.header }} />
+                    <div className="w-5 h-5 rounded-md border" style={{ backgroundColor: p.accent }} />
+                  </div>
+                  <p className="text-xs font-semibold">{p.name}</p>
+                </button>
+              );
+            })}
+            <button onClick={() => updateReport({ themeId: "custom" })}
+              className={`p-3 rounded-xl border-2 text-left transition-all ${reportSettings.themeId === "custom" ? "border-primary scale-[1.02]" : "border-border hover:border-primary/40"}`}>
+              <div className="flex gap-1.5 mb-1.5">
+                <div className="w-5 h-5 rounded-md border" style={{ backgroundColor: reportSettings.customHeader || "#888" }} />
+                <div className="w-5 h-5 rounded-md border" style={{ backgroundColor: reportSettings.customAccent || "#888" }} />
+              </div>
+              <p className="text-xs font-semibold">কাস্টম</p>
+            </button>
+          </div>
+        </div>
+
+        {reportSettings.themeId === "custom" && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">হেডার কালার</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={reportSettings.customHeader || "#2563eb"}
+                  onChange={(e) => updateReport({ customHeader: e.target.value })}
+                  className="w-10 h-10 rounded-lg border border-border cursor-pointer" />
+                <span className="text-[11px] text-muted-foreground font-mono">{reportSettings.customHeader || "#2563eb"}</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">অ্যাকসেন্ট কালার</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={reportSettings.customAccent || "#3b82f6"}
+                  onChange={(e) => updateReport({ customAccent: e.target.value })}
+                  className="w-10 h-10 rounded-lg border border-border cursor-pointer" />
+                <span className="text-[11px] text-muted-foreground font-mono">{reportSettings.customAccent || "#3b82f6"}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1 pt-2 border-t border-border">
+          <label className="text-xs font-semibold">ফুটার টেক্সট</label>
+          <input value={reportSettings.footerText} onChange={(e) => updateReport({ footerText: e.target.value })}
+            placeholder="Target — Smart Exam Platform"
+            className="w-full glass-strong rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold flex items-center gap-1.5"><Link2 size={12} /> ফুটার লিংক ({reportSettings.footerLinks.length})</label>
+            <button onClick={addFooterLink} className="text-xs px-2.5 py-1 rounded-lg bg-primary/10 text-primary inline-flex items-center gap-1">
+              <Plus size={12} /> যোগ করুন
+            </button>
+          </div>
+          {reportSettings.footerLinks.map((lnk, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input value={lnk.label} onChange={(e) => updateFooterLink(i, "label", e.target.value)}
+                placeholder="Website / Facebook / Telegram"
+                className="flex-1 glass-strong rounded-lg px-3 py-2 text-xs" />
+              <input value={lnk.url} onChange={(e) => updateFooterLink(i, "url", e.target.value)}
+                placeholder="https://..."
+                className="flex-[1.5] glass-strong rounded-lg px-3 py-2 text-xs" />
+              <button onClick={() => removeFooterLink(i)} className="p-2 rounded-lg bg-destructive/10 text-destructive">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+          {reportSettings.footerLinks.length === 0 && (
+            <p className="text-[11px] text-muted-foreground text-center py-2">এখনও কোনো লিংক যোগ করা হয়নি।</p>
+          )}
+        </div>
+      </div>
+
       <div className="text-center">
         <button onClick={save} disabled={saveMut.isPending} className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all">
           <Save size={16} /> সব সেভ করুন
