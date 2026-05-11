@@ -224,6 +224,42 @@ const StudentLiveExams = () => {
           </div>
         )}
       </div>
+
+      {finishedBoards.length > 0 && (
+        <div>
+          <h2 className="text-base font-bold mb-3 flex items-center gap-2">
+            <Trophy size={16} className="text-warning" /> ফলাফল ও র‍্যাঙ্কিং ({finishedBoards.length})
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {finishedBoards.map((exam) => (
+              <button key={exam.id} onClick={() => openBoard(exam)}
+                className="glass-card-static p-4 text-left hover:scale-[1.01] transition-transform flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0">
+                  <Medal size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate">{exam.title}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {new Date(exam.end_time).toLocaleDateString("bn-BD")} • {exam.status === "ended" ? "সম্পন্ন" : "আপনি জমা দিয়েছেন"}
+                  </p>
+                </div>
+                <span className="text-xs text-primary font-semibold shrink-0">র‍্যাঙ্কিং →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {boardExam && (
+        <LeaderboardModal
+          exam={boardExam}
+          parts={boardParts}
+          profiles={boardProfiles}
+          loading={boardLoading}
+          currentUserId={user?.id}
+          onClose={() => setBoardExam(null)}
+        />
+      )}
     </div>
   );
 };
