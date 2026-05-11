@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
 import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/reportThemePresets";
+import { ensureBanglaFont, BANGLA_FONT } from "@/lib/pdfBanglaFont";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
 interface LiveExam {
@@ -105,6 +106,10 @@ const AdminLiveExams = () => {
     if (!selected) return;
     (async () => {
       const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+      // Register Bangla font (falls back to helvetica on network failure)
+      const banglaOk = await ensureBanglaFont(doc);
+      const FONT = banglaOk ? BANGLA_FONT : "helvetica";
+      const setF = (style: "normal" | "bold" = "normal") => doc.setFont(FONT, style);
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
       const sorted = [...parts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
@@ -171,10 +176,10 @@ const AdminLiveExams = () => {
       doc.setFillColor(headerRgb[0], headerRgb[1], headerRgb[2]);
       doc.rect(0, 0, W, 28, "F");
       doc.setTextColor(255, 255, 255);
-      doc.setFont("helvetica", "bold");
+      setF("bold");
       doc.setFontSize(17);
       doc.text(selected.title, 12, 12);
-      doc.setFont("helvetica", "normal");
+      setF("normal");
       doc.setFontSize(10);
       doc.text("Final Result Report", 12, 19);
       doc.setFontSize(9);
@@ -186,7 +191,7 @@ const AdminLiveExams = () => {
         `Start: ${fmt(selected.start_time)}    End: ${fmt(selected.end_time)}`,
         `Duration: ${selected.duration} min    Participants: ${parts.length}    Submitted: ${submitted.length}`,
       ];
-      doc.setFont("helvetica", "normal");
+      setF("normal");
       doc.setFontSize(9.5);
       doc.setTextColor(71, 85, 105);
       let y = 35;
@@ -197,20 +202,20 @@ const AdminLiveExams = () => {
       const top3 = sorted.slice(0, 3);
       if (top3.length > 0) {
         const podiumY = y;
-        const podiumH = 78;
+        const podiumH = 82;
         // Background card
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(10, podiumY, W - 20, podiumH, 3, 3, "F");
         // Title
-        doc.setFont("helvetica", "bold");
+        setF("bold");
         doc.setFontSize(11);
         doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
         doc.text("TOP PERFORMERS", W / 2, podiumY + 7, { align: "center" });
 
         const slots: { rank: number; idx: number; medal: string; medalRgb: [number, number, number]; tileH: number }[] = [
-          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 18 },
-          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 24 },
-          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 14 },
+          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 16 },
+          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 26 },
+          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 16 },
         ];
         const slotW = (W - 40) / 3;
         slots.forEach((s, sIdx) => {
@@ -223,23 +228,23 @@ const AdminLiveExams = () => {
           doc.setFillColor(s.medalRgb[0], s.medalRgb[1], s.medalRgb[2]);
           doc.roundedRect(cx - slotW / 2 + 6, tileTop, slotW - 12, s.tileH, 2, 2, "F");
           doc.setTextColor(255, 255, 255);
-          doc.setFont("helvetica", "bold");
+          setF("bold");
           doc.setFontSize(s.medal === "1st" ? 13 : 10);
-          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 1.5, { align: "center" });
+          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 2, { align: "center" });
 
-          // Avatar between title and tile
-          const avSize = s.medal === "1st" ? 14 : 12;
+          // Avatar — 1st higher up, 2nd & 3rd at the same lower level
+          const avSize = s.medal === "1st" ? 16 : 12;
           const avX = cx - avSize / 2;
-          const avY = podiumY + 12;
+          const avY = s.medal === "1st" ? podiumY + 12 : podiumY + 22;
           drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", avX, avY, avSize);
 
           // Name + score
           doc.setTextColor(15, 23, 42);
-          doc.setFont("helvetica", "bold");
+          setF("bold");
           doc.setFontSize(8.5);
           const name = (profiles[p.user_id]?.full_name || "Unknown").slice(0, 18);
           doc.text(name, cx, avY + avSize + 4, { align: "center" });
-          doc.setFont("helvetica", "normal");
+          setF("normal");
           doc.setFontSize(7.5);
           doc.setTextColor(71, 85, 105);
           doc.text(`${p.score}/${p.max_score} • ${p.percentage.toFixed(1)}%`, cx, avY + avSize + 7.5, { align: "center" });
@@ -265,9 +270,9 @@ const AdminLiveExams = () => {
             p.status || (p.submitted_at ? "submitted" : "started"),
           ];
         }),
-        styles: { font: "helvetica", fontStyle: "normal", fontSize: 9, cellPadding: 2.4, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 9 },
-        headStyles: { font: "helvetica", fontStyle: "bold", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
-        bodyStyles: { font: "helvetica", fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
+        styles: { font: FONT, fontStyle: "normal", fontSize: 9, cellPadding: 2.4, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 9 },
+        headStyles: { font: FONT, fontStyle: "bold", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
+        bodyStyles: { font: FONT, fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
         columnStyles: {
           0: { cellWidth: 10 },
           1: { cellWidth: 10 },
@@ -297,14 +302,14 @@ const AdminLiveExams = () => {
         doc.setLineWidth(0.4);
         doc.line(10, H - 14, W - 10, H - 14);
 
-        doc.setFont("helvetica", "bold");
+        setF("bold");
         doc.setFontSize(9);
         doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
         doc.text(reportCfg.footerText || "", 12, H - 9);
 
         // Links — center-spread
         if (reportCfg.footerLinks?.length) {
-          doc.setFont("helvetica", "normal");
+          setF("normal");
           doc.setFontSize(8.5);
           doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
           let lx = 12;
@@ -323,7 +328,7 @@ const AdminLiveExams = () => {
           });
         }
 
-        doc.setFont("helvetica", "normal");
+        setF("normal");
         doc.setFontSize(8.5);
         doc.setTextColor(100, 116, 139);
         doc.text(`Page ${pn} / ${pages}`, W - 12, H - 9, { align: "right" });
