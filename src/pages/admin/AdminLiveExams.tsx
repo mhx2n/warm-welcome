@@ -9,6 +9,7 @@ import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/repor
 import { ensureBanglaFont, BANGLA_FONT } from "@/lib/pdfBanglaFont";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
+interface ExamDetailRow { id: string; title: string; question_count: number; duration: number; negative_marking: number; }
 interface LiveExam {
   id: string; title: string; description: string; exam_id: string;
   start_time: string; end_time: string; duration: number;
@@ -30,6 +31,7 @@ const AdminLiveExams = () => {
   const [selected, setSelected] = useState<LiveExam | null>(null);
   const [parts, setParts] = useState<Participant[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  const [selectedExamDetail, setSelectedExamDetail] = useState<ExamDetailRow | null>(null);
 
   const [form, setForm] = useState({
     title: "", description: "", exam_id: "", start_time: "", end_time: "",
@@ -51,7 +53,11 @@ const AdminLiveExams = () => {
 
   const loadDetail = async (le: LiveExam) => {
     setSelected(le);
-    const { data } = await supabase.from("live_exam_participants").select("*").eq("live_exam_id", le.id).order("score", { ascending: false });
+    const [{ data }, { data: examDetail }] = await Promise.all([
+      supabase.from("live_exam_participants").select("*").eq("live_exam_id", le.id).order("score", { ascending: false }),
+      supabase.from("exams").select("id,title,question_count,duration,negative_marking").eq("id", le.exam_id).maybeSingle(),
+    ]);
+    setSelectedExamDetail((examDetail as ExamDetailRow | null) || null);
     if (data) {
       setParts(data as Participant[]);
       const ids = Array.from(new Set((data as Participant[]).map((x) => x.user_id)));
