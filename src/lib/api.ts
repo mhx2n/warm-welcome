@@ -426,6 +426,8 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
       const { data, error } = await supabase.from("site_settings").select("*").limit(1).maybeSingle();
       if (error) throw error;
       if (!data) return defaultSiteSettings;
+      const uiLabelsRaw = (data.ui_labels as any) || undefined;
+      const { __reportSettings, ...uiLabels } = uiLabelsRaw || {};
       return {
         aboutTitle: data.about_title,
         aboutContent: data.about_content,
@@ -442,8 +444,8 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
         heroSubtitle: data.hero_subtitle,
         activeThemeId: data.active_theme_id,
         customTheme: data.custom_theme as any || undefined,
-        uiLabels: data.ui_labels as any || undefined,
-        reportSettings: (data as any).report_settings as any || undefined,
+        uiLabels: Object.keys(uiLabels).length ? uiLabels : undefined,
+        reportSettings: (data as any).report_settings as any || __reportSettings || undefined,
       };
     },
     () => store.getSiteSettings(),
@@ -475,8 +477,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       hero_subtitle: settings.heroSubtitle,
       active_theme_id: settings.activeThemeId,
       custom_theme: settings.customTheme as any || null,
-      ui_labels: settings.uiLabels as any || null,
-      report_settings: settings.reportSettings as any || null,
+      ui_labels: { ...(settings.uiLabels || {}), __reportSettings: settings.reportSettings || null } as any,
     };
 
     if (existing) {
