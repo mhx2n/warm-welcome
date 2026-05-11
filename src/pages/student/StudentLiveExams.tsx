@@ -283,6 +283,7 @@ const StudentLiveExams = () => {
           loading={boardLoading}
           currentUserId={user?.id}
           podium={reportCfg.podiumColors || { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" }}
+          logo={reportCfg.liveExamLogo}
           showFullList={reportCfg.showFullLeaderboardToStudents !== false}
           onClose={() => setBoardExam(null)}
         />
@@ -377,7 +378,7 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
 }
 
 function LeaderboardModal({
-  exam, parts, profiles, loading, currentUserId, podium, showFullList, onClose,
+  exam, parts, profiles, loading, currentUserId, podium, logo, showFullList, onClose,
 }: {
   exam: LiveExam;
   parts: FinishedParticipant[];
@@ -385,6 +386,7 @@ function LeaderboardModal({
   loading: boolean;
   currentUserId?: string;
   podium: { gold: string; silver: string; bronze: string };
+  logo?: string;
   showFullList: boolean;
   onClose: () => void;
 }) {
@@ -411,7 +413,7 @@ function LeaderboardModal({
           <div className="relative flex items-start gap-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
               style={{ background: `linear-gradient(135deg, ${podium.gold}, ${podium.bronze})` }}>
-              <Trophy size={22} className="text-white drop-shadow" />
+              {logo ? <img src={logo} alt="" className="w-full h-full object-cover rounded-2xl" /> : <Trophy size={22} className="text-white drop-shadow" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Leaderboard</p>
