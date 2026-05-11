@@ -167,7 +167,7 @@ const AdminLiveExams = () => {
         doc.setFillColor(accentRgb[0], accentRgb[1], accentRgb[2]);
         doc.circle(x + size / 2, y + size / 2, size / 2, "F");
         doc.setTextColor(255, 255, 255);
-        doc.setFont("helvetica", "bold");
+        try { doc.setFont(BANGLA_FONT, "bold"); } catch { doc.setFont("helvetica", "bold"); }
         doc.setFontSize(size * 1.6);
         doc.text((name || "U")[0].toUpperCase(), x + size / 2, y + size / 2 + size * 0.18, { align: "center" });
       };
