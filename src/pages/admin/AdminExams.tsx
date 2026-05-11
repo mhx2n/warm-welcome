@@ -362,11 +362,9 @@ const AdminExams = () => {
         <QuestionEditor exam={editingExam} onClose={() => setEditingExam(null)} onSaved={() => setEditingExam(null)} />
       )}
       {pdfExam && (
-        {pdfExam && (
-          <Suspense fallback={null}>
-            <ExamPdfExporter exam={pdfExam} open={!!pdfExam} onClose={() => setPdfExam(null)} />
-          </Suspense>
-        )}
+        <Suspense fallback={null}>
+          <ExamPdfExporter exam={pdfExam} open={!!pdfExam} onClose={() => setPdfExam(null)} />
+        </Suspense>
       )}
     </div>
   );
