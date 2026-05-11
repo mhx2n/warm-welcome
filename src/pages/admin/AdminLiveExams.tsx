@@ -111,11 +111,11 @@ const AdminLiveExams = () => {
   const exportLeaderboardPDF = () => {
     if (!selected) return;
     (async () => {
-      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "landscape", compress: true });
       // Register Bangla font (falls back to helvetica on network failure)
       const banglaOk = await ensureBanglaFont(doc);
       const FONT = banglaOk ? BANGLA_FONT : "helvetica";
-      const setF = (style: "normal" | "bold" = "normal") => doc.setFont(FONT, style);
+      const setF = (_style: "normal" | "bold" = "normal") => doc.setFont(FONT, "normal");
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
       const sorted = [...parts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
@@ -204,8 +204,8 @@ const AdminLiveExams = () => {
         startY: 42,
         body: infoRows,
         theme: "plain",
-        styles: { font: FONT, fontSize: 9, cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 }, textColor: [51, 65, 85], overflow: "linebreak" },
-        columnStyles: { 0: { cellWidth: 34, fontStyle: "bold", textColor: [15, 23, 42] }, 1: { cellWidth: W - 58 } },
+        styles: { font: FONT, fontStyle: "normal", fontSize: 9.5, cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 }, textColor: [51, 65, 85], overflow: "linebreak" },
+        columnStyles: { 0: { cellWidth: 34, fontStyle: "normal", textColor: [15, 23, 42] }, 1: { cellWidth: W - 58 } },
         margin: { left: 12, right: 12 },
       });
       let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : 74;
@@ -231,22 +231,22 @@ const AdminLiveExams = () => {
             p.status || (p.submitted_at ? "submitted" : "started"),
           ];
         }),
-        styles: { font: FONT, fontStyle: "normal", fontSize: 7.6, cellPadding: 1.7, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 8.5 },
-        headStyles: { font: FONT, fontStyle: "bold", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
+        styles: { font: FONT, fontStyle: "normal", fontSize: 8.8, cellPadding: 1.8, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 8.5 },
+        headStyles: { font: FONT, fontStyle: "normal", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
         bodyStyles: { font: FONT, fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
         columnStyles: {
           0: { cellWidth: 8 },
           1: { cellWidth: 12 },
-          2: { halign: "left", cellWidth: 30 },
-          3: { cellWidth: 22 },
-          4: { cellWidth: 20 },
-          5: { cellWidth: 18 },
-          6: { cellWidth: 13 },
-          7: { cellWidth: 13 },
-          8: { cellWidth: 14 },
-          9: { cellWidth: 13 },
-          10: { cellWidth: 14 },
-          11: { cellWidth: 18 },
+          2: { halign: "left", cellWidth: 48 },
+          3: { cellWidth: 26 },
+          4: { cellWidth: 28 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 18 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: 18 },
+          9: { cellWidth: 18 },
+          10: { cellWidth: 20 },
+          11: { cellWidth: 24 },
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 10, right: 10, bottom: 22 },
