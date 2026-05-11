@@ -348,6 +348,8 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
 }
 
 const emptySlot = (): Slot => ({ text: "", link: "" });
+const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
+const PDF_CFG_VERSION = 2;
 const DEFAULT_CFG: PdfConfig = {
   title: "",
   subtitle: "",
@@ -382,8 +384,6 @@ const DEFAULT_CFG: PdfConfig = {
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
-const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
-const PDF_CFG_VERSION = 2;
 function loadSavedDefault(): Partial<PdfConfig> | null {
   try {
     const raw = localStorage.getItem(PDF_DEFAULT_KEY);
@@ -409,20 +409,13 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     return { ...DEFAULT_CFG, ...(saved || {}), title: exam.title, subtitle: exam.subject || "" };
   });
   const [generating, setGenerating] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
   const [progress, setProgress] = useState("");
-  const [previewUrl, setPreviewUrl] = useState("");
-  const previewRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
     const saved = loadSavedDefault();
     setCfg((c) => ({ ...DEFAULT_CFG, ...(saved || {}), ...c, title: exam.title, subtitle: exam.subject || c.subtitle }));
   }, [open, exam.id, exam.title, exam.subject]);
-
-  useEffect(() => () => {
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-  }, []);
 
   const questionCount = useMemo(() => exam.questions?.length || 0, [exam.questions]);
 
