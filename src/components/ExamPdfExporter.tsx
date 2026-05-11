@@ -373,6 +373,10 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
   // reference output. File size and sharpness benefit massively from this.
   onProgress?.("প্রিন্ট প্রিভিউ খুলছে...");
 
+  // In debug mode, mark every page so the CSS overlay renders
+  if (cfg.debugMode) {
+    pages.forEach((p) => p.page.classList.add("debug"));
+  }
   const pagesHtml = pages.map((p) => p.page.outerHTML).join("\n");
   stage.remove();
 
@@ -403,12 +407,42 @@ ${fontHrefs.map((h) => `<link rel="stylesheet" href="${escapeAttr(h)}" />`).join
   @media print {
     .pdf-page { box-shadow: none !important; }
   }
+  ${cfg.debugMode ? `
+  body{background:#f1f5f9;padding:20px;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .pdf-page{box-shadow:0 6px 24px rgba(0,0,0,.15);margin:0}
+  .debug-bar{position:fixed;top:0;left:0;right:0;background:#0f172a;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font:600 13px system-ui;z-index:9999}
+  .debug-bar button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:8px 14px;font:600 12px system-ui;cursor:pointer}
+  .debug-bar .legend{display:flex;gap:14px;font-size:11px;font-weight:500}
+  .debug-bar .legend i{display:inline-block;width:10px;height:10px;border:2px dashed;margin-right:4px;vertical-align:middle}
+  body{padding-top:60px}
+  @media print { .debug-bar{display:none} body{padding:0;background:#fff} .pdf-page{box-shadow:none} }
+  ` : ""}
 </style>
 </head>
 <body>
+${cfg.debugMode ? `<div class="debug-bar">
+  <span>🐞 Debug Mode — ${pages.length} পৃষ্ঠা</span>
+  <span class="legend">
+    <span><i style="border-color:#ef4444"></i>পেজ বক্স</span>
+    <span><i style="border-color:#3b82f6"></i>মার্জিন/বডি এরিয়া</span>
+    <span><i style="border-color:#16a34a"></i>ফুটার এরিয়া</span>
+  </span>
+  <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+</div>` : ""}
 ${pagesHtml}
 </body>
 </html>`;
+
+  // In debug mode, open in a NEW WINDOW so the user can visually inspect
+  // overlaps before deciding to print. Otherwise use a hidden iframe.
+  if (cfg.debugMode) {
+    const w = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
+    if (!w) throw new Error("Popup ব্লক করা হয়েছে — ব্রাউজার সেটিংস চেক করুন");
+    w.document.open();
+    w.document.write(docHtml);
+    w.document.close();
+    return;
+  }
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
