@@ -1,74 +1,78 @@
-
 ## লক্ষ্য
-1. PDF-এ ম্যাথের ভগ্নাংশ (যেমন $\frac{a}{b}$) ভেঙে যাচ্ছে এবং জুম করলে ফেটে যাচ্ছে — দুটোই ঠিক করতে হবে।
-2. ওয়েবসাইট ল্যাগ — PDF এক্সপোর্টার সবসময় mount/heavy import হচ্ছে, সেটা কমানো।
-3. এডমিন একবার পছন্দমতো সেট করে "ডিফল্ট হিসেবে সেভ" করতে পারবে — পরের বার মোডাল খুললেই ঐ সেটিংসই থাকবে, শুধু "ডাউনলোড" চাপলেই হবে।
+
+লাইভ এক্সাম রিপোর্ট ও লিডারবোর্ডকে প্রফেশনাল ও কনফিগারেবল করা — চারটি উন্নয়ন একসাথে।
 
 ---
 
-## ১. ম্যাথ ভগ্নাংশ বিচ্ছিন্ন হওয়ার সমাধান
+### 1. PDF রিপোর্টে কাস্টমাইজেবল থিম + ফুটার
 
-বর্তমান কারণ: KaTeX রেন্ডার হচ্ছে `output: "html"` মোডে — এর ভেতরে অনেক `<span>` stack থাকে যেগুলো `html2canvas` সবসময় সঠিকভাবে align করতে পারে না (বিশেষত fraction bar মাঝখানে আঁকার জন্য সে absolute positioning ব্যবহার করে)। ফলে ভগ্নাংশের লাইনটা বা lower limit ভেঙে যায়।
+`SiteSettings`-এ নতুন ফিল্ড যোগ:
 
-ফিক্স:
-- `renderInline()` -এ KaTeX আউটপুট `output: "mathml"` থেকে fallback সহ **`output: "htmlAndMathml"`** + আমরা প্রতিটি math এক্সপ্রেশনকে আগে থেকেই **SVG-তে কনভার্ট করে নেব** (KaTeX → temporary div → MathJax-style SVG নয় বরং `katex` রেন্ডার করে, তারপর সেই DOM-কে আলাদাভাবে **SVG হিসেবে serialize** করে inline `<img>`-এ বসাব)।
-- বিকল্প আরও সহজ ও নির্ভরযোগ্য পথ (এটাই বেছে নেওয়া হবে): প্রতিটি math fragment-কে আলাদা off-screen div-এ রেন্ডার → `html2canvas(scale: 4)` দিয়ে **transparent PNG** → তারপর সেই PNG inline `<img>` হিসেবে বসানো। ফলে fraction bar/limits আর কখনোই ভাঙবে না, কারণ html2canvas পুরো math block-কে এক ইউনিট হিসেবে capture করে — পরে main page render করার সময় শুধু একটা ছোট ইমেজ বসছে, কোনো nested span re-flow নেই।
-- ক্যাশ: একই LaTeX expression বার বার রেন্ডার এড়াতে in-memory `Map<string, dataUrl>` cache।
+```ts
+reportSettings?: {
+  themeId: string;             // "blue" | "green" | "maroon" | "black-gold" | "purple" | "custom"
+  customHeader?: string;       // hex (যখন themeId === "custom")
+  customAccent?: string;       // hex
+  footerText: string;          // "Target — Smart Exam Platform"
+  footerLinks: { label: string; url: string }[]; // Website / Facebook / Telegram
+}
+```
 
-## ২. জুম করলে ফেটে যাওয়ার সমাধান (PDF কোয়ালিটি)
-
-বর্তমানে পুরো A4 পেজকে JPEG (০.৮৫) হিসেবে বসানো হচ্ছে — এটাই raster, তাই zoom করলে blur।
-
-পরিবর্তন:
-- `addImage` ফরম্যাট **JPEG → PNG** (lossless) করব এবং default `renderScale` ২ → **৩** এ তুলব।
-- `html2canvas` কে আরও sharp করতে: `letterRendering: true`, `imageTimeout: 0`, এবং স্পষ্টভাবে DPR-aware।
-- সাইজ যাতে অতিরিক্ত না বাড়ে: math image-গুলো transparent PNG হলেও খুবই ছোট অংশ; পেজগুলো PNG হলে ~১.৫–৩ MB হবে (পুরোপুরি sharp)।
-- "কোয়ালিটি" সেকশনে নতুন **"আউটপুট ফরম্যাট"** ড্রপডাউন: `PNG (sharp, একটু বড়)` / `JPEG (ছোট)` — ডিফল্ট PNG।
-
-## ৩. ওয়েবসাইট ল্যাগ কমানো
-
-কারণ:
-- `ExamPdfExporter.tsx` পেজে আসা মাত্র `katex`, `katex.css`, `mhchem`, `html2canvas`, `jspdf` সবগুলো eagerly import হয় — bundle ভারী।
-
-ফিক্স:
-- যেখান থেকে এক্সপোর্টার ব্যবহার হয় সেখানে `React.lazy(() => import("@/components/ExamPdfExporter"))` + `Suspense` wrap। শুধু "PDF এক্সপোর্ট" বাটন ক্লিকে chunk লোড হবে।
-- KaTeX CSS-ও exporter এর ভিতরে dynamic `import()` দিয়ে আনা হবে।
-- `pdfFonts` এবং Google Fonts CSS link শুধু modal `open=true` হলে inject হবে (এখনই অনেকটা আছে — শুধু lazy chunk নিশ্চিত করব)।
-
-## ৪. এডমিনের "ডিফল্ট হিসেবে সেভ"
-
-বর্তমানে প্রতিবার মোডাল খুললে `DEFAULT_CFG` দিয়ে রিসেট হয়।
-
-পরিবর্তন:
-- `localStorage` key `target_pdf_default_cfg`-এ পুরো `PdfConfig` (logo data url সহ) JSON হিসেবে সেভ।
-- এডমিন রোলে modal-এ ৩টা নতুন বাটন আসবে footer-bar-এ:
-  - **"ডিফল্ট হিসেবে সেভ"** — বর্তমান cfg কে localStorage-এ সেভ।
-  - **"ডিফল্টে রিসেট"** — saved default-এ ফিরিয়ে আনবে।
-  - **"ফ্যাক্টরি রিসেট"** — saved default মুছে আবার `DEFAULT_CFG`।
-- modal খোলার সময় load order: `savedDefault → DEFAULT_CFG`, এর সাথে ঐ exam-এর title/subject inject।
-- (অপশনাল, পরে) এডমিন site-wide রাখতে চাইলে Supabase site_settings টেবিলের `pdfDefaultConfig` কলাম যুক্ত করা যাবে — তবে এই pass-এ শুধু localStorage যথেষ্ট, যেহেতু request "এডমিন এর পছন্দ default রাখা" — সাধারণত একই ব্রাউজার/ডিভাইস।
+- `src/lib/types.ts` + `src/lib/api.ts` (default + DB column `report_settings jsonb`) আপডেট।
+- নতুন migration: `site_settings.report_settings jsonb`।
+- নতুন এডমিন পেজ সেকশন `AdminThemeSettings`-এর ভেতরে "PDF রিপোর্ট থিম" — প্রিসেট সিলেক্টর + কালার পিকার (যখন custom) + footer text + লিংক ম্যানেজমেন্ট (Website/Facebook/Telegram, Add/Remove)।
 
 ---
 
-## ফাইল পরিবর্তনের তালিকা
+### 2. PDF রিপোর্টের নতুন প্রফেশনাল লেআউট
 
-1. **`src/components/ExamPdfExporter.tsx`** (প্রধান কাজ)
-   - নতুন `renderMathToImage()` helper + cache; `renderInline()` math-গুলোকে `<img>` হিসেবে inject।
-   - `buildPdf()`-এ JPEG → PNG (cfg ভিত্তিক), `renderScale` default 3।
-   - cfg-এ নতুন ফিল্ড `outputFormat: "png" | "jpeg"`।
-   - `loadDefaultCfg()` / `saveDefaultCfg()` / `clearDefaultCfg()` helper, modal খোলার `useEffect`-এ apply।
-   - নতুন ৩টি বাটন UI।
+`AdminLiveExams.tsx` → `exportLeaderboardPDF` রি-রাইট:
 
-2. **`src/components/ExamPdfExporter` ব্যবহারকারী ফাইল(গুলো)** — যেমন `AdminExams.tsx`, `AdminQuestions.tsx`, `StudentExamDetails.tsx` (যেটায় import আছে): static import → `lazy + Suspense`।
-
-3. কোনো নতুন dependency দরকার নেই (katex, html2canvas, jspdf আগেই আছে)।
+- হেডার ব্যান্ড — থিম কালার থেকে।
+- **পডিয়াম ব্লক** (টপ ৩): 1st center (largest gold tile), 2nd left silver, 3rd right bronze। প্রতিটি tile-এ — avatar (rounded image, fall back to initials), নাম, batch, score, percent।
+- নিচে full leaderboard টেবিল — প্রতিটি row-এ avatar (small thumbnail) যোগ। autoTable-এর `didDrawCell` hook দিয়ে cell-এ image draw করব।
+- avatar URL fetch: `profiles.avatar_url`; PDF embed করার জন্য আগে fetch → base64 convert → `doc.addImage` (jsPDF)।
+- ফুটার: কনফিগারেবল text + clickable links (`doc.textWithLink`)।
+- থিম কালার dynamic (RGB tuple)।
 
 ---
 
-## টেস্ট/ভেরিফাই
-- Math-heavy exam (যেমন ব্যবহারকারীর `Math_10.pdf`) এ এক্সপোর্ট করে দেখা: $\frac{x^2+1}{x-1}$, $\sqrt{a}$, $\sum$, integration — সব intact কিনা।
-- ডাউনলোড করা PDF ৪০০% zoom-এ লেখা/ফর্মুলা শার্প কিনা।
-- প্রথমবার সাইট লোডে `katex` chunk আলাদা হলো কিনা (network tab)।
-- ডিফল্ট সেভ → মোডাল বন্ধ → আবার খুলে → একই সেটিংস কিনা।
+### 3. Student `/live-exams` portal-এ সরাসরি লিডারবোর্ড
 
-আপনি অনুমোদন দিলেই এই প্ল্যান অনুযায়ী implement করব।
+`StudentLiveExams.tsx`-এ নতুন সেকশন: **"সম্পন্ন পরীক্ষা ও ফলাফল"**।
+
+- ফেচ: `live_exams` যেগুলো `status === "ended"`, অথবা `status === "live"` কিন্তু ইউজার ইতোমধ্যে submit করেছে।
+- প্রতিটি কার্ডে — title, date, "র‍্যাঙ্কিং দেখুন" বাটন → modal/expand করে full leaderboard (top-3 podium + list) দেখাবে; ইউজারের রো highlighted।
+- পরীক্ষার শুরুর বাটনে ক্লিক করতে হবে না।
+- Live ranking দেখানোর শর্ত (চলমান exam-এ): `show_leaderboard` সত্য হলেই, কেবল submit করার পর।
+
+---
+
+### 4. `LiveExamAttempt` — চলমান অবস্থায় leaderboard লুকানো
+
+- চলমান অবস্থায় "লাইভ র‍্যাঙ্কিং" panel সরিয়ে দেওয়া (cheating prevention)।
+- শুধু submit-এর পর full ranking দেখাবে — যেটা ইতোমধ্যে আছে।
+
+---
+
+### টেকনিক্যাল ডিটেইল
+
+- jsPDF avatar embed: `fetch(url).then(blob → FileReader → dataURL)` → `doc.addImage(dataUrl, 'JPEG', x, y, w, h)`। CORS-friendly URL দরকার (Supabase storage সাধারণত OK)।
+- Avatar না থাকলে initial-circle fallback canvas-এ draw করব (`doc.circle` + `doc.text`)।
+- `themePresets.ts`-এর pattern ফলো করে `reportThemePresets.ts` বানাব।
+- Migration: শুধু `ALTER TABLE site_settings ADD COLUMN report_settings jsonb`।
+
+---
+
+### ফাইল পরিবর্তন
+
+| ফাইল | কাজ |
+|---|---|
+| `supabase/migrations/<new>.sql` | `report_settings` column |
+| `src/lib/types.ts` | `SiteSettings.reportSettings` |
+| `src/lib/api.ts` | default + read/write |
+| `src/lib/reportThemePresets.ts` (new) | ৫টি প্রিসেট |
+| `src/pages/admin/AdminThemeSettings.tsx` | নতুন UI সেকশন |
+| `src/pages/admin/AdminLiveExams.tsx` | নতুন PDF লেআউট (podium + avatars + theme + footer) |
+| `src/pages/student/StudentLiveExams.tsx` | "সম্পন্ন পরীক্ষা" সেকশন + leaderboard modal |
+| `src/pages/student/LiveExamAttempt.tsx` | চলমান অবস্থায় ranking hide |
