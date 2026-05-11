@@ -1,11 +1,11 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import katex from "katex";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
-import { Download, Eye, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
+import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
 import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
@@ -19,18 +19,10 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
 const A4_W = 794;
 const A4_H = 1123;
 
-const FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap";
 let fontPromise: Promise<void> | null = null;
 async function ensureFonts() {
   if (fontPromise) return fontPromise;
   fontPromise = (async () => {
-    if (!document.querySelector(`link[data-pdf-fonts]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = FONT_CSS_URL;
-      link.setAttribute("data-pdf-fonts", "1");
-      document.head.appendChild(link);
-    }
     const fontReady = (document as Document & { fonts?: { ready?: Promise<unknown>; load?: (s: string) => Promise<unknown> } }).fonts;
     try {
       if (fontReady?.load) {
@@ -77,13 +69,14 @@ interface PdfConfig {
   jpegQuality: number;
   renderScale: number;
   outputFormat: "png" | "jpeg";
+  presetVersion: number;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
 // Render text with inline math (KaTeX) into an HTML string
-function renderInline(text: string, mathImages: Map<string, string>): string {
+function renderInline(text: string): string {
   if (!text) return "";
-  let s = String(text);
+  const s = String(text);
   // escape HTML first, but preserve math regions
   const tokens: { type: "text" | "math"; value: string; display?: boolean }[] = [];
   const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
@@ -102,21 +95,16 @@ function renderInline(text: string, mathImages: Map<string, string>): string {
   const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
   return tokens.map((t) => {
     if (t.type === "text") return escape(t.value);
-    const key = (t.display ? "D|" : "I|") + t.value;
-    const url = mathImages.get(key);
-    if (url) {
-      const cls = t.display ? "math-img math-d" : "math-img math-i";
-      return `<img class="${cls}" src="${url}" alt="" data-math="1"/>`;
-    }
     try {
-      return katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true });
+      const cls = t.display ? "math-wrap math-display" : "math-wrap math-inline";
+      return `<span class="${cls}">${katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true })}</span>`;
     } catch {
       return escape(`$${t.value}$`);
     }
   }).join("");
 }
 
-function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<string, string>): string {
+function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const correct = resolveCorrectOptionText(q);
   const correctIdx = q.options.findIndex((o) => o === correct);
   const correctLbl = correctIdx >= 0 ? (BN_OPT[correctIdx] || `${correctIdx + 1}`) : "";
@@ -124,15 +112,15 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<str
   const optionsHtml = (q.options || []).map((opt, i) => `
     <div class="opt">
       <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)}.</span>
-      <span class="opt-txt">${renderInline(opt, mi)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
+      <span class="opt-txt">${renderInline(opt)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
     </div>
   `).join("");
 
   const showAnsBlock = cfg.showAnswers || (cfg.showExplanations && q.explanation);
   const ansBlock = showAnsBlock ? `
     <div class="ans-box">
-      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—", mi)}</span></div>` : ""}
-      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation, mi)}</span></div>` : ""}
+      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—")}</span></div>` : ""}
+      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation)}</span></div>` : ""}
     </div>` : "";
 
   const qImg = cfg.showQuestionImages && q.questionImage ? `<img class="q-img" src="${q.questionImage}" alt=""/>` : "";
@@ -141,7 +129,7 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig, mi: Map<str
     <div class="q">
       <div class="q-head">
         <span class="q-num">${toBn(idx + 1)}.</span>
-        <span class="q-text">${renderInline(q.question, mi)}</span>
+        <span class="q-text">${renderInline(q.question)}</span>
       </div>
       ${qImg}
       <div class="opts">${optionsHtml}</div>
@@ -194,11 +182,12 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-footer .slot.right{text-align:right}
     .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
     /* KaTeX tweaks for inline pdf */
-    .katex{font-size:1em !important;line-height:1.2 !important}
-    .katex-display{margin:.25em 0 !important;text-align:left}
-    .katex-display>.katex{text-align:left}
-    .math-img{display:inline-block;vertical-align:-0.25em;max-width:100%}
-    .math-img.math-d{display:block;margin:.25em 0;vertical-align:middle}
+    .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
+    .math-display{display:block;white-space:normal;margin:.18em 0}
+    .katex{font-size:1em !important;line-height:1.18 !important;white-space:nowrap}
+    .katex-display{margin:0 !important;text-align:left;overflow:visible}
+    .katex-display>.katex{text-align:left;white-space:normal}
+    .katex .mfrac{break-inside:avoid;page-break-inside:avoid}
   `;
 }
 
@@ -241,71 +230,8 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-function collectMath(exam: Exam): { value: string; display: boolean }[] {
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
-  const seen = new Set<string>();
-  const out: { value: string; display: boolean }[] = [];
-  const scan = (s: string | undefined | null) => {
-    if (!s) return;
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(s)) !== null) {
-      let value = ""; let display = false;
-      if (m[2] != null) { value = m[2]; display = true; }
-      else if (m[4] != null) { value = m[4]; display = true; }
-      else if (m[6] != null) { value = m[6]; display = false; }
-      else if (m[8] != null) { value = m[8]; display = false; }
-      const key = (display ? "D|" : "I|") + value;
-      if (!seen.has(key)) { seen.add(key); out.push({ value, display }); }
-    }
-  };
-  for (const q of exam.questions || []) {
-    scan(q.question);
-    scan(q.explanation);
-    (q.options || []).forEach((o) => scan(o));
-  }
-  return out;
-}
-
-const mathCache = new Map<string, string>();
-
-async function prerenderMathImages(exam: Exam, onProgress?: (msg: string) => void): Promise<Map<string, string>> {
-  const items = collectMath(exam);
-  const result = new Map<string, string>();
-  if (!items.length) return result;
-  const stage = document.createElement("div");
-  stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;background:#fff;padding:8px;font-family:'Noto Sans Bengali','Inter',sans-serif;";
-  document.body.appendChild(stage);
-  let done = 0;
-  for (const it of items) {
-    const cacheKey = (it.display ? "D|" : "I|") + it.value;
-    if (mathCache.has(cacheKey)) {
-      result.set(cacheKey, mathCache.get(cacheKey)!);
-      done++; continue;
-    }
-    try {
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "display:inline-block;padding:2px 4px;background:#ffffff;color:#0f172a;font-size:18px;line-height:1.25;";
-      wrap.innerHTML = katex.renderToString(it.value, { displayMode: it.display, throwOnError: false, output: "html", strict: false, trust: true });
-      stage.appendChild(wrap);
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const canvas = await html2canvas(wrap, { scale: 4, backgroundColor: null, useCORS: true, logging: false });
-      const url = canvas.toDataURL("image/png");
-      result.set(cacheKey, url);
-      mathCache.set(cacheKey, url);
-      stage.removeChild(wrap);
-    } catch { /* skip */ }
-    done++;
-    if (done % 4 === 0) onProgress?.(`ম্যাথ রেন্ডার ${toBn(done)}/${toBn(items.length)}...`);
-  }
-  stage.remove();
-  return result;
-}
-
 async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
   await ensureFonts();
-  onProgress?.("ম্যাথ প্রি-রেন্ডার...");
-  const mathImages = await prerenderMathImages(exam, onProgress);
   onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
 
   // Off-screen render container
@@ -351,7 +277,7 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   for (let i = 0; i < exam.questions.length; i++) {
     const q = exam.questions[i];
     const tmp = document.createElement("div");
-    tmp.innerHTML = buildQuestionHTML(q, i, cfg, mathImages);
+    tmp.innerHTML = buildQuestionHTML(q, i, cfg);
     const node = tmp.firstElementChild as HTMLElement;
     curCol.appendChild(node);
     if (!fits(curCol)) {
@@ -400,7 +326,7 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   const pdfH = pdf.internal.pageSize.getHeight();
 
   for (let i = 0; i < pages.length; i++) {
-    onProgress?.(`পেজ রেন্ডার ${toBn(i + 1)}/${toBn(pages.length)}...`);
+    onProgress?.(`পৃষ্ঠা তৈরি ${toBn(i + 1)}/${toBn(pages.length)}...`);
     const canvas = await html2canvas(pages[i].page, {
       scale: cfg.renderScale,
       backgroundColor: "#ffffff",
@@ -422,6 +348,8 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
 }
 
 const emptySlot = (): Slot => ({ text: "", link: "" });
+const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
+const PDF_CFG_VERSION = 2;
 const DEFAULT_CFG: PdfConfig = {
   title: "",
   subtitle: "",
@@ -449,21 +377,24 @@ const DEFAULT_CFG: PdfConfig = {
   columnGap: 16,
   questionGap: 8,
   optionGap: 3,
-  jpegQuality: 0.9,
-  renderScale: 3,
-  outputFormat: "png",
+  jpegQuality: 0.84,
+  renderScale: 2,
+  outputFormat: "jpeg",
+  presetVersion: PDF_CFG_VERSION,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
-const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
 function loadSavedDefault(): Partial<PdfConfig> | null {
   try {
     const raw = localStorage.getItem(PDF_DEFAULT_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PdfConfig>;
+    if (parsed.presetVersion === PDF_CFG_VERSION) return parsed;
+    return { ...parsed, renderScale: 2, jpegQuality: 0.82, outputFormat: "jpeg", presetVersion: PDF_CFG_VERSION };
   } catch { return null; }
 }
 function saveDefault(cfg: PdfConfig) {
-  try { localStorage.setItem(PDF_DEFAULT_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
+  try { localStorage.setItem(PDF_DEFAULT_KEY, JSON.stringify({ ...cfg, presetVersion: PDF_CFG_VERSION })); } catch { /* ignore */ }
 }
 function clearSavedDefault() {
   try { localStorage.removeItem(PDF_DEFAULT_KEY); } catch { /* ignore */ }
@@ -478,20 +409,13 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     return { ...DEFAULT_CFG, ...(saved || {}), title: exam.title, subtitle: exam.subject || "" };
   });
   const [generating, setGenerating] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
   const [progress, setProgress] = useState("");
-  const [previewUrl, setPreviewUrl] = useState("");
-  const previewRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
     const saved = loadSavedDefault();
     setCfg((c) => ({ ...DEFAULT_CFG, ...(saved || {}), ...c, title: exam.title, subtitle: exam.subject || c.subtitle }));
   }, [open, exam.id, exam.title, exam.subject]);
-
-  useEffect(() => () => {
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-  }, []);
 
   const questionCount = useMemo(() => exam.questions?.length || 0, [exam.questions]);
 
@@ -525,39 +449,23 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     } finally { setGenerating(false); setProgress(""); }
   };
 
-  const previewPdf = async () => {
-    if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
-    setPreviewing(true);
-    try {
-      const blob = await buildPdf(exam, cfg, setProgress);
-      const next = URL.createObjectURL(blob);
-      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-      previewRef.current = next;
-      setPreviewUrl(next);
-      toast({ title: "প্রিভিউ প্রস্তুত ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
-    } catch (err: unknown) {
-      console.error("PDF preview error", err);
-      toast({ title: "প্রিভিউ তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
-    } finally { setPreviewing(false); setProgress(""); }
-  };
-
   if (!open) return null;
-  const busy = generating || previewing;
+  const busy = generating;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] bg-background/80 backdrop-blur-sm overflow-y-auto p-2 md:p-5">
       <div className="min-h-[calc(100vh-1rem)] flex items-start justify-center">
-        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden my-2 border border-border">
+        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden my-2 border border-border">
           <div className="flex items-start justify-between gap-3 p-4 md:p-5 border-b border-border shrink-0">
             <div>
               <h2 className="font-bold text-lg flex items-center gap-2"><Settings2 size={18} /> PDF এক্সপোর্ট</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Browser-shaped Bengali • KaTeX math • Auto pagination • Live preview</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">এক ক্লিকে ডাউনলোড • Bengali font • KaTeX math • Auto pagination</p>
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg" aria-label="বন্ধ করুন"><X size={16} /></button>
           </div>
 
-          <div className="grid lg:grid-cols-[420px_1fr] min-h-[calc(100vh-8rem)]">
-            <div className="p-4 md:p-5 space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto border-b lg:border-b-0 lg:border-r border-border">
+          <div className="min-h-[calc(100vh-8rem)]">
+            <div className="p-4 md:p-5 space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto">
               <section className="grid sm:grid-cols-2 gap-3">
                 <TextInput label="শিরোনাম" value={cfg.title} onChange={(v) => updateCfg("title", v)} />
                 <TextInput label="সাবটাইটেল" value={cfg.subtitle} onChange={(v) => updateCfg("subtitle", v)} />
@@ -669,32 +577,13 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                     <RotateCcw size={13} /> রিসেট
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                <button onClick={previewPdf} disabled={busy} className="py-3 rounded-xl border border-border text-sm font-bold flex items-center justify-center gap-2 hover:bg-muted disabled:opacity-50">
-                  {previewing ? <Loader2 className="animate-spin" size={16} /> : previewUrl ? <RefreshCcw size={16} /> : <Eye size={16} />}
-                  {previewing ? progress || "প্রিভিউ..." : previewUrl ? "প্রিভিউ রিফ্রেশ" : "প্রিভিউ"}
-                </button>
-                <button onClick={downloadPdf} disabled={busy} className="py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                <button onClick={downloadPdf} disabled={busy} className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   {generating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                  {generating ? progress || "তৈরি হচ্ছে..." : "ডাউনলোড"}
+                  {generating ? progress || "তৈরি হচ্ছে..." : "এক ক্লিকে PDF ডাউনলোড"}
                 </button>
-                </div>
               </div>
             </div>
 
-            <div className="p-3 md:p-5 bg-muted/20 min-h-[520px]">
-              <div className="h-full min-h-[500px] rounded-xl border border-border bg-background overflow-hidden">
-                {previewUrl ? (
-                  <iframe title="PDF preview" src={previewUrl} className="w-full h-full min-h-[500px]" />
-                ) : (
-                  <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center px-6 text-muted-foreground">
-                    <Eye size={34} className="mb-3 opacity-70" />
-                    <p className="text-sm font-semibold text-foreground">প্রিভিউ এখানে দেখাবে</p>
-                    <p className="text-xs mt-1 max-w-sm">সেটিংস বদলে "প্রিভিউ" চাপলে এখানে আসবে — তারপর নিশ্চিন্তে ডাউনলোড।</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>
