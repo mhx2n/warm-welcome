@@ -480,12 +480,12 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
     };
 
     if (existing) {
-      const { error } = await supabase.from("site_settings").update(row).eq("id", existing.id);
+      const { error } = await supabase.from("site_settings").update(row as any).eq("id", existing.id);
       if (error) throw error;
       return;
     }
 
-    const { error } = await supabase.from("site_settings").insert(row);
+    const { error } = await supabase.from("site_settings").insert(row as any);
     if (error) throw error;
   }, { action: "সাইট সেটিংস সেভ", suppressConnectivityError: true });
 }
