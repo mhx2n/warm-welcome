@@ -611,7 +611,15 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   <NumberInput label="রেন্ডার scale (1.5–3)" value={cfg.renderScale} min={1.2} max={3} step={0.1} onChange={(v) => updateCfg("renderScale", v)} />
                   <NumberInput label="JPEG কোয়ালিটি (.5–.95)" value={cfg.jpegQuality} min={0.5} max={0.95} step={0.01} onChange={(v) => updateCfg("jpegQuality", v)} />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">বেশি = তীক্ষ্ণ কিন্তু বড় ফাইল। সাধারণত scale ২ + কোয়ালিটি ০.৮৫ যথেষ্ট।</p>
+                <div className="mt-2">
+                  <label className="text-xs text-muted-foreground">আউটপুট ফরম্যাট</label>
+                  <select value={cfg.outputFormat} onChange={(e) => updateCfg("outputFormat", e.target.value as "png" | "jpeg")}
+                    className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                    <option value="png">PNG — সর্বোচ্চ শার্প (zoom-এ ফাটে না)</option>
+                    <option value="jpeg">JPEG — হালকা ফাইল</option>
+                  </select>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5">PNG + scale ৩ = জুমেও তীক্ষ্ণ। ছোট ফাইল চাইলে JPEG বাছুন।</p>
               </section>
 
               <section>
