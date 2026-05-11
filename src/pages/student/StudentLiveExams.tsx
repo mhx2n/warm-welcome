@@ -255,8 +255,12 @@ const StudentLiveExams = () => {
             {finishedBoards.map((exam) => (
               <button key={exam.id} onClick={() => openBoard(exam)}
                 className="glass-card-static p-4 text-left hover:scale-[1.01] transition-transform flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0">
-                  <Medal size={20} />
+                <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0 overflow-hidden">
+                  {reportCfg.liveExamLogo ? (
+                    <img src={reportCfg.liveExamLogo} alt="logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <Medal size={20} />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold truncate">{exam.title}</p>
