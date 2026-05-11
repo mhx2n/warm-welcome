@@ -584,19 +584,6 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
               </div>
             </div>
 
-            <div className="p-3 md:p-5 bg-muted/20 min-h-[520px]">
-              <div className="h-full min-h-[500px] rounded-xl border border-border bg-background overflow-hidden">
-                {previewUrl ? (
-                  <iframe title="PDF preview" src={previewUrl} className="w-full h-full min-h-[500px]" />
-                ) : (
-                  <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center px-6 text-muted-foreground">
-                    <Eye size={34} className="mb-3 opacity-70" />
-                    <p className="text-sm font-semibold text-foreground">প্রিভিউ এখানে দেখাবে</p>
-                    <p className="text-xs mt-1 max-w-sm">সেটিংস বদলে "প্রিভিউ" চাপলে এখানে আসবে — তারপর নিশ্চিন্তে ডাউনলোড।</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>
