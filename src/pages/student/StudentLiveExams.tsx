@@ -338,7 +338,11 @@ function ExamCardLive({
           <FileText size={12} className="text-primary" /> {meta?.question_count ?? "—"} প্রশ্ন
         </div>
         <div className="bg-muted/40 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
-          <Minus size={12} className="text-destructive" /> ন্যাগেটিভ: {meta ? meta.negative_marking : "—"}
+          <Minus size={12} className="text-destructive" /> ন্যাগেটিভ: {(() => {
+            const override = (exam as any).negative_marking;
+            if (override !== null && override !== undefined) return Number(override);
+            return meta ? meta.negative_marking : "—";
+          })()}
         </div>
         <div className={`rounded-lg px-2.5 py-2 flex items-center justify-center gap-1.5 ${premium ? "bg-warning/15 text-warning" : "bg-success/15 text-success"}`}>
           {premium ? <Lock size={14} /> : <LockOpen size={14} />}
