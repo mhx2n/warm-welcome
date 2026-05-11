@@ -533,13 +533,11 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
     setGenerating(true);
     try {
-      const blob = await buildPdf(exam, cfg, setProgress);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${safeFileName(cfg.title || exam.title)}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast({ title: "PDF তৈরি হয়েছে ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
+      await printExam(exam, cfg, setProgress);
+      toast({
+        title: "প্রিন্ট ডায়ালগ খুলেছে ✅",
+        description: 'গন্তব্য থেকে "Save as PDF" বেছে নিন — ভেক্টর কোয়ালিটি, ছোট ফাইল।',
+      });
     } catch (err: unknown) {
       console.error("PDF gen error", err);
       toast({ title: "PDF তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
