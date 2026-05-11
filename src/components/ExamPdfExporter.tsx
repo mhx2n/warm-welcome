@@ -72,6 +72,7 @@ interface PdfConfig {
   showWatermark: boolean;
   watermarkOpacity: number;
   watermarkSize: number;
+  debugMode: boolean;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
@@ -143,10 +144,14 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 }
 
 function pageStyles(cfg: PdfConfig): string {
+  // Reserve vertical room for the absolutely-positioned footer so that
+  // the flex body never bleeds underneath it.
+  const footerH = cfg.showFooter ? 36 : 0;
+  const footerBottom = Math.max(8, cfg.pageMargin / 2);
   return `
     .pdf-page{
       width:${A4_W}px;height:${A4_H}px;
-      padding:${cfg.pageMargin}px;
+      padding:${cfg.pageMargin}px ${cfg.pageMargin}px ${cfg.pageMargin + footerH}px ${cfg.pageMargin}px;
       box-sizing:border-box;
       background:#ffffff;color:#0f172a;
       font-family:'Noto Sans Bengali','Inter','Hind Siliguri',sans-serif;
@@ -182,15 +187,23 @@ function pageStyles(cfg: PdfConfig): string {
     .ans-line span{font-weight:600;color:#0f172a}
     .exp-line{margin-top:3px;color:#334155;font-weight:400}
     .exp-line b{color:${cfg.primaryColor};font-weight:700}
-    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${Math.max(8, cfg.pageMargin / 2)}px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
-    .pdf-footer .slot{flex:1;min-width:0;color:${cfg.primaryColor};font-weight:600}
-    .pdf-footer .slot.center{text-align:center;flex:1.2}
-    .pdf-footer .slot.right{text-align:right}
+    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${footerBottom}px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
+    .pdf-footer .slot{min-width:0;color:${cfg.primaryColor};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pdf-footer .slot.left{text-align:left;justify-self:start}
+    .pdf-footer .slot.center{text-align:center;justify-self:center}
+    .pdf-footer .slot.right{text-align:right;justify-self:end}
     .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
     .pdf-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:${cfg.watermarkOpacity};width:${cfg.watermarkSize}%;max-width:70%;pointer-events:none;z-index:0;object-fit:contain}
     .pdf-header,.pdf-body,.pdf-footer,.pdf-mini-head{position:relative;z-index:1}
     .pdf-mini-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid ${cfg.primaryColor};padding:0 2px 4px;margin-bottom:6px;font-size:${cfg.baseFontSize - 0.5}px;color:${cfg.primaryColor};font-weight:600}
     .pdf-mini-head .t{font-weight:800}
+    /* Debug overlay — only when .debug class is on .pdf-page */
+    .pdf-page.debug{outline:2px dashed #ef4444;outline-offset:-1px}
+    .pdf-page.debug::before{content:"";position:absolute;left:${cfg.pageMargin}px;top:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${cfg.pageMargin + footerH}px;border:1px dashed #3b82f6;pointer-events:none;z-index:5}
+    .pdf-page.debug .pdf-footer{outline:1.5px dashed #16a34a;outline-offset:2px;background:rgba(22,163,74,.06)}
+    .pdf-page.debug .pdf-body{background:rgba(59,130,246,.04)}
+    .pdf-page.debug::after{content:"page " counter(pg);counter-increment:pg;position:absolute;top:2px;right:6px;font-size:10px;color:#ef4444;font-weight:700;z-index:10}
+    body{counter-reset:pg}
     /* KaTeX tweaks for inline pdf */
     .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
     .math-display{display:block;white-space:normal;margin:.18em 0}
@@ -360,6 +373,10 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
   // reference output. File size and sharpness benefit massively from this.
   onProgress?.("প্রিন্ট প্রিভিউ খুলছে...");
 
+  // In debug mode, mark every page so the CSS overlay renders
+  if (cfg.debugMode) {
+    pages.forEach((p) => p.page.classList.add("debug"));
+  }
   const pagesHtml = pages.map((p) => p.page.outerHTML).join("\n");
   stage.remove();
 
@@ -390,12 +407,42 @@ ${fontHrefs.map((h) => `<link rel="stylesheet" href="${escapeAttr(h)}" />`).join
   @media print {
     .pdf-page { box-shadow: none !important; }
   }
+  ${cfg.debugMode ? `
+  body{background:#f1f5f9;padding:20px;display:flex;flex-direction:column;align-items:center;gap:20px}
+  .pdf-page{box-shadow:0 6px 24px rgba(0,0,0,.15);margin:0}
+  .debug-bar{position:fixed;top:0;left:0;right:0;background:#0f172a;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;font:600 13px system-ui;z-index:9999}
+  .debug-bar button{background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:8px 14px;font:600 12px system-ui;cursor:pointer}
+  .debug-bar .legend{display:flex;gap:14px;font-size:11px;font-weight:500}
+  .debug-bar .legend i{display:inline-block;width:10px;height:10px;border:2px dashed;margin-right:4px;vertical-align:middle}
+  body{padding-top:60px}
+  @media print { .debug-bar{display:none} body{padding:0;background:#fff} .pdf-page{box-shadow:none} }
+  ` : ""}
 </style>
 </head>
 <body>
+${cfg.debugMode ? `<div class="debug-bar">
+  <span>🐞 Debug Mode — ${pages.length} পৃষ্ঠা</span>
+  <span class="legend">
+    <span><i style="border-color:#ef4444"></i>পেজ বক্স</span>
+    <span><i style="border-color:#3b82f6"></i>মার্জিন/বডি এরিয়া</span>
+    <span><i style="border-color:#16a34a"></i>ফুটার এরিয়া</span>
+  </span>
+  <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+</div>` : ""}
 ${pagesHtml}
 </body>
 </html>`;
+
+  // In debug mode, open in a NEW WINDOW so the user can visually inspect
+  // overlaps before deciding to print. Otherwise use a hidden iframe.
+  if (cfg.debugMode) {
+    const w = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
+    if (!w) throw new Error("Popup ব্লক করা হয়েছে — ব্রাউজার সেটিংস চেক করুন");
+    w.document.open();
+    w.document.write(docHtml);
+    w.document.close();
+    return;
+  }
 
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
@@ -478,6 +525,7 @@ const DEFAULT_CFG: PdfConfig = {
   showWatermark: true,
   watermarkOpacity: 0.07,
   watermarkSize: 55,
+  debugMode: false,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
@@ -533,8 +581,10 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     try {
       await printExam(exam, cfg, setProgress);
       toast({
-        title: "প্রিন্ট ডায়ালগ খুলেছে ✅",
-        description: 'গন্তব্য থেকে "Save as PDF" বেছে নিন — ভেক্টর কোয়ালিটি, ছোট ফাইল।',
+        title: cfg.debugMode ? "🐞 Debug প্রিভিউ খুলেছে" : "প্রিন্ট ডায়ালগ খুলেছে ✅",
+        description: cfg.debugMode
+          ? "নতুন ট্যাবে লাল/নীল/সবুজ বক্স দেখে overlap চেক করুন।"
+          : 'গন্তব্য থেকে "Save as PDF" বেছে নিন।',
       });
     } catch (err: unknown) {
       console.error("PDF gen error", err);
@@ -627,6 +677,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   <Toggle label="অপশনের ছবি" checked={cfg.showOptionImages} onChange={(v) => updateCfg("showOptionImages", v)} />
                   <Toggle label="হেডার শুধু ১ম পৃষ্ঠায়" checked={cfg.headerFirstPageOnly} onChange={(v) => updateCfg("headerFirstPageOnly", v)} />
                   <Toggle label="লোগো ওয়াটারমার্ক" checked={cfg.showWatermark} onChange={(v) => updateCfg("showWatermark", v)} />
+                  <Toggle label="🐞 Debug মোড (overlap দেখাও)" checked={cfg.debugMode} onChange={(v) => updateCfg("debugMode", v)} />
                 </div>
                 {cfg.showWatermark && (
                   <div className="grid sm:grid-cols-2 gap-3 mt-3">
