@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useExams, useSections, useDeleteExam, useUpdateExamField, useUpsertExam } from "@/hooks/useSupabaseData";
 import { Exam, Question } from "@/lib/types";
 import { Eye, EyeOff, Trash2, FolderOpen, Pencil, Lock, BookOpen, X, Check, Layers, Crown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import QuestionEditor from "@/components/QuestionEditor";
-import ExamPdfExporter from "@/components/ExamPdfExporter";
+const ExamPdfExporter = lazy(() => import("@/components/ExamPdfExporter"));
 import { FileDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -362,7 +362,9 @@ const AdminExams = () => {
         <QuestionEditor exam={editingExam} onClose={() => setEditingExam(null)} onSaved={() => setEditingExam(null)} />
       )}
       {pdfExam && (
-        <ExamPdfExporter exam={pdfExam} open={!!pdfExam} onClose={() => setPdfExam(null)} />
+        <Suspense fallback={null}>
+          <ExamPdfExporter exam={pdfExam} open={!!pdfExam} onClose={() => setPdfExam(null)} />
+        </Suspense>
       )}
     </div>
   );
