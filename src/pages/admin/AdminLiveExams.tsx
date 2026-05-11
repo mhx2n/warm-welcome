@@ -335,6 +335,31 @@ const AdminLiveExams = () => {
 
   const sortedParts = [...parts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
 
+  const downloadAvatar = async (uid: string) => {
+    const pr = profiles[uid];
+    if (!pr?.avatar_url) {
+      toast({ title: "এই ইউজারের কোনো প্রোফাইল ছবি নেই", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch(pr.avatar_url);
+      if (!res.ok) throw new Error("ছবি ফেচ করা গেলো না");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const ext = (blob.type.split("/")[1] || "jpg").split(";")[0];
+      const safeName = (pr.full_name || uid).replace(/[\\/:*?"<>|]+/g, "_");
+      a.href = url;
+      a.download = `${safeName}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "ডাউনলোড ব্যর্থ", description: e.message, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -437,7 +462,7 @@ const AdminLiveExams = () => {
                 <thead className="sticky top-0 bg-card">
                   <tr className="text-left border-b border-border">
                     <th className="p-2">র‍্যাঙ্ক</th><th className="p-2">নাম</th><th className="p-2">ব্যাচ</th>
-                    <th className="p-2">স্কোর</th><th className="p-2">সঠিক</th><th className="p-2">ভুল</th><th className="p-2">%</th><th className="p-2">স্ট্যাটাস</th>
+                    <th className="p-2">স্কোর</th><th className="p-2">সঠিক</th><th className="p-2">ভুল</th><th className="p-2">%</th><th className="p-2">স্ট্যাটাস</th><th className="p-2">ছবি</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -446,13 +471,36 @@ const AdminLiveExams = () => {
                     return (
                       <tr key={p.id} className="border-b border-border/50">
                         <td className="p-2 font-bold">{i + 1}</td>
-                        <td className="p-2">{pr?.full_name || "—"}<br /><span className="text-muted-foreground">{pr?.email}</span></td>
+                        <td className="p-2">
+                          <div className="flex items-center gap-2">
+                            {pr?.avatar_url ? (
+                              <img src={pr.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                                {(pr?.full_name || "U")[0].toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate">{pr?.full_name || "—"}</p>
+                              <p className="text-muted-foreground truncate text-[10px]">{pr?.email}</p>
+                            </div>
+                          </div>
+                        </td>
                         <td className="p-2">{pr?.batch_name || "—"}</td>
                         <td className="p-2 font-semibold">{p.score}/{p.max_score}</td>
                         <td className="p-2 text-success">{p.correct}</td>
                         <td className="p-2 text-destructive">{p.wrong}</td>
                         <td className="p-2">{p.percentage.toFixed(1)}%</td>
                         <td className="p-2"><span className="text-[10px] px-1.5 py-0.5 rounded bg-muted">{p.status}</span></td>
+                        <td className="p-2">
+                          <button
+                            onClick={() => downloadAvatar(p.user_id)}
+                            disabled={!pr?.avatar_url}
+                            title={pr?.avatar_url ? "প্রোফাইল ছবি ডাউনলোড" : "ছবি নেই"}
+                            className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <ImageDown size={12} />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
