@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Unlock } from "lucide-react";
+import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Unlock, X, Medal } from "lucide-react";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { getLabel } from "@/lib/labels";
 
@@ -17,7 +17,21 @@ interface LiveExam {
   duration: number;
   access_mode: string;
   status: string;
+  show_leaderboard?: boolean;
 }
+
+interface FinishedParticipant {
+  id: string;
+  user_id: string;
+  score: number;
+  max_score: number;
+  percentage: number;
+  status: string;
+  submitted_at: string | null;
+  time_taken_seconds: number;
+}
+
+interface ProfileLite { user_id: string; full_name: string | null; avatar_url: string | null; batch_name: string | null; }
 
 function useTick() {
   const [, set] = useState(0);
@@ -46,21 +60,69 @@ const StudentLiveExams = () => {
   const navigate = useNavigate();
   const { canAccess, loading: accessLoading } = usePremiumAccess();
   const [exams, setExams] = useState<LiveExam[]>([]);
+  const [finishedExams, setFinishedExams] = useState<LiveExam[]>([]);
+  const [mySubmittedIds, setMySubmittedIds] = useState<Set<string>>(new Set());
+  const [boardExam, setBoardExam] = useState<LiveExam | null>(null);
+  const [boardParts, setBoardParts] = useState<FinishedParticipant[]>([]);
+  const [boardProfiles, setBoardProfiles] = useState<Record<string, ProfileLite>>({});
+  const [boardLoading, setBoardLoading] = useState(false);
   const [joiningExamId, setJoiningExamId] = useState<string | null>(null);
   useTick();
 
   const load = async () => {
-    const { data } = await supabase
+    const { data: live } = await supabase
       .from("live_exams")
       .select("*")
       .in("status", ["scheduled", "live"])
       .order("start_time", { ascending: true });
-    if (data) setExams(data as LiveExam[]);
+    if (live) setExams(live as LiveExam[]);
+
+    const { data: ended } = await supabase
+      .from("live_exams")
+      .select("*")
+      .eq("status", "ended")
+      .order("end_time", { ascending: false })
+      .limit(30);
+    if (ended) setFinishedExams(ended as LiveExam[]);
+
+    if (user) {
+      const { data: mine } = await supabase
+        .from("live_exam_participants")
+        .select("live_exam_id,status")
+        .eq("user_id", user.id);
+      const ids = new Set<string>();
+      (mine || []).forEach((m: any) => { if (m.status === "submitted") ids.add(m.live_exam_id); });
+      setMySubmittedIds(ids);
+    }
   };
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [user]);
+
+  const openBoard = async (exam: LiveExam) => {
+    setBoardExam(exam);
+    setBoardLoading(true);
+    setBoardParts([]);
+    setBoardProfiles({});
+    const { data } = await supabase
+      .from("live_exam_participants")
+      .select("id,user_id,score,max_score,percentage,status,submitted_at,time_taken_seconds")
+      .eq("live_exam_id", exam.id)
+      .order("score", { ascending: false });
+    const list = (data || []) as FinishedParticipant[];
+    list.sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
+    setBoardParts(list);
+    const ids = Array.from(new Set(list.map((p) => p.user_id)));
+    if (ids.length) {
+      const { data: pr } = await supabase.from("profiles")
+        .select("user_id,full_name,avatar_url,batch_name").in("user_id", ids);
+      const map: Record<string, ProfileLite> = {};
+      (pr || []).forEach((x: any) => { map[x.user_id] = x; });
+      setBoardProfiles(map);
+    }
+    setBoardLoading(false);
+  };
 
   const accessibleExams = accessLoading ? [] : exams.filter((exam) => canAccess(exam.exam_id));
   const liveNow = accessibleExams.filter((exam) => exam.status === "live");
