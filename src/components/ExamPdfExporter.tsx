@@ -577,16 +577,10 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                     <RotateCcw size={13} /> রিসেট
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                <button onClick={previewPdf} disabled={busy} className="py-3 rounded-xl border border-border text-sm font-bold flex items-center justify-center gap-2 hover:bg-muted disabled:opacity-50">
-                  {previewing ? <Loader2 className="animate-spin" size={16} /> : previewUrl ? <RefreshCcw size={16} /> : <Eye size={16} />}
-                  {previewing ? progress || "প্রিভিউ..." : previewUrl ? "প্রিভিউ রিফ্রেশ" : "প্রিভিউ"}
-                </button>
-                <button onClick={downloadPdf} disabled={busy} className="py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                <button onClick={downloadPdf} disabled={busy} className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   {generating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                  {generating ? progress || "তৈরি হচ্ছে..." : "ডাউনলোড"}
+                  {generating ? progress || "তৈরি হচ্ছে..." : "এক ক্লিকে PDF ডাউনলোড"}
                 </button>
-                </div>
               </div>
             </div>
 
