@@ -406,7 +406,7 @@ function ExamPdfDoc({ exam, cfg, mathMap }: { exam: Exam; cfg: PdfConfig; mathMa
   const colWidth = cfg.twoColumn ? (contentW - cfg.columnGap - 0.7) / 2 : contentW;
 
   return (
-    <Document title={cfg.title || exam.title} author="Lovable PDF Exporter">
+    <PdfDocument title={cfg.title || exam.title} author="Lovable PDF Exporter">
       {pages.map((pg, pageIdx) => (
         <Page key={pageIdx} size="A4" style={[styles.page, { padding: cfg.pageMargin, fontSize: cfg.baseFontSize, lineHeight: cfg.lineHeight }]}>
           <View>
@@ -450,7 +450,7 @@ function ExamPdfDoc({ exam, cfg, mathMap }: { exam: Exam; cfg: PdfConfig; mathMa
           ) : null}
         </Page>
       ))}
-    </Document>
+    </PdfDocument>
   );
 }
 
