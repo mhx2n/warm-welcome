@@ -459,7 +459,7 @@ function LeaderboardModal({
                             </div>
                             <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold text-white shadow-md whitespace-nowrap"
                               style={{ background: meta.color }}>
-                              {p.score}/{p.max_score}
+                              {Number(p.score).toFixed(2)}/{p.max_score}
                             </div>
                           </div>
                           <p className={`text-xs font-bold leading-tight truncate w-full mt-1.5 ${isMe ? "text-primary" : ""}`}>
@@ -502,7 +502,7 @@ function LeaderboardModal({
                         {pr?.batch_name && <p className="text-[10px] text-muted-foreground truncate">{pr.batch_name}</p>}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-bold">{p.score}/{p.max_score}</p>
+                        <p className="text-sm font-bold">{Number(p.score).toFixed(2)}/{p.max_score}</p>
                         <p className="text-[10px] text-muted-foreground">{Math.round(p.percentage)}%</p>
                       </div>
                     </div>
