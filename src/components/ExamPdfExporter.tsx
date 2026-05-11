@@ -473,7 +473,10 @@ const safeFileName = (n: string) => (n || "exam").replace(/[\\/:*?"<>|]+/g, "_")
 
 export default function Exporter({ exam, open, onClose }: { exam: Exam; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
-  const [cfg, setCfg] = useState<PdfConfig>({ ...DEFAULT_CFG, title: exam.title, subtitle: exam.subject || "" });
+  const [cfg, setCfg] = useState<PdfConfig>(() => {
+    const saved = loadSavedDefault();
+    return { ...DEFAULT_CFG, ...(saved || {}), title: exam.title, subtitle: exam.subject || "" };
+  });
   const [generating, setGenerating] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [progress, setProgress] = useState("");
@@ -482,7 +485,8 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
 
   useEffect(() => {
     if (!open) return;
-    setCfg((c) => ({ ...c, title: exam.title, subtitle: exam.subject || c.subtitle }));
+    const saved = loadSavedDefault();
+    setCfg((c) => ({ ...DEFAULT_CFG, ...(saved || {}), ...c, title: exam.title, subtitle: exam.subject || c.subtitle }));
   }, [open, exam.id, exam.title, exam.subject]);
 
   useEffect(() => () => {
