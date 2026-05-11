@@ -5,7 +5,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
-import { Download, Eye, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
+import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
 import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
@@ -69,6 +69,7 @@ interface PdfConfig {
   jpegQuality: number;
   renderScale: number;
   outputFormat: "png" | "jpeg";
+  presetVersion: number;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
@@ -325,7 +326,7 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   const pdfH = pdf.internal.pageSize.getHeight();
 
   for (let i = 0; i < pages.length; i++) {
-    onProgress?.(`পেজ রেন্ডার ${toBn(i + 1)}/${toBn(pages.length)}...`);
+    onProgress?.(`পৃষ্ঠা তৈরি ${toBn(i + 1)}/${toBn(pages.length)}...`);
     const canvas = await html2canvas(pages[i].page, {
       scale: cfg.renderScale,
       backgroundColor: "#ffffff",
