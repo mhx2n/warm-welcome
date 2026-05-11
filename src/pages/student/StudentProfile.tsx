@@ -81,17 +81,39 @@ const StudentProfile = () => {
 
   const handleSave = async () => {
     if (!user) return;
+    const name = fullName.trim();
+    const ph = phone.trim();
+    if (!name) {
+      return toast({ title: "নাম খালি রাখা যাবে না", variant: "destructive" });
+    }
+    if (name.length > 100) {
+      return toast({ title: "নাম ১০০ অক্ষরের মধ্যে হতে হবে", variant: "destructive" });
+    }
+    if (ph) {
+      const digits = ph.replace(/\D/g, "");
+      // Allow 11-digit BD mobile (01XXXXXXXXX) or 13 with country code (8801XXXXXXXXX)
+      const ok = /^(01[3-9]\d{8}|8801[3-9]\d{8})$/.test(digits);
+      if (!ok) {
+        return toast({
+          title: "মোবাইল নাম্বার সঠিক নয়",
+          description: "উদাহরণ: 01XXXXXXXXX (১১ ডিজিট)",
+          variant: "destructive",
+        });
+      }
+    }
     setSaving(true);
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ full_name: fullName, phone })
+        .update({ full_name: name, phone: ph || null })
         .eq("user_id", user.id);
       if (error) throw error;
       await refreshProfile();
+      setFullName(name);
+      setPhone(ph);
       toast({ title: "সংরক্ষিত হয়েছে ✅" });
     } catch (err: any) {
-      toast({ title: "ত্রুটি", description: err.message, variant: "destructive" });
+      toast({ title: "সংরক্ষণ ব্যর্থ", description: err?.message || "অজানা ত্রুটি", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -99,24 +121,52 @@ const StudentProfile = () => {
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset the input so re-selecting the same file re-triggers onChange
+    if (e.target) e.target.value = "";
     if (!file || !user) return;
+    if (!file.type.startsWith("image/")) {
+      return toast({ title: "শুধু ছবি ফাইল আপলোড করুন", variant: "destructive" });
+    }
     if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "ছবি ৫MB এর মধ্যে হতে হবে", variant: "destructive" });
-      return;
+      return toast({ title: "ছবি ৫MB এর মধ্যে হতে হবে", variant: "destructive" });
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
+      // Confirm an active session — RLS requires auth.uid()
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
+        throw new Error("সেশন শেষ — আবার লগইন করুন");
+      }
+      // Derive a safe extension from MIME type (more reliable than filename)
+      const mimeExt = (file.type.split("/")[1] || "jpg").split(";")[0].toLowerCase();
+      const ext = ["jpg", "jpeg", "png", "webp", "gif"].includes(mimeExt) ? mimeExt : "jpg";
+
+      // Clean up older avatars in this user's folder so storage doesn't bloat
+      try {
+        const { data: existing } = await supabase.storage.from("avatars").list(user.id, { limit: 100 });
+        if (existing && existing.length) {
+          const paths = existing.map((f) => `${user.id}/${f.name}`);
+          await supabase.storage.from("avatars").remove(paths);
+        }
+      } catch { /* non-fatal */ }
+
       const path = `${user.id}/avatar-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type, cacheControl: "3600" });
       if (uploadError) throw uploadError;
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
-      const { error: updateError } = await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("user_id", user.id);
+      const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
+      // Append a cache-buster so the new image shows immediately
+      const publicUrl = `${pub.publicUrl}?v=${Date.now()}`;
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("user_id", user.id);
       if (updateError) throw updateError;
       await refreshProfile();
       toast({ title: "ছবি আপডেট হয়েছে ✅" });
     } catch (err: any) {
-      toast({ title: "আপলোড ব্যর্থ", description: err.message, variant: "destructive" });
+      toast({ title: "আপলোড ব্যর্থ", description: err?.message || "অজানা ত্রুটি", variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -216,6 +266,8 @@ const StudentProfile = () => {
           <label className="text-xs text-muted-foreground">পূর্ণ নাম</label>
           <input
             type="text"
+            maxLength={100}
+            placeholder="আপনার পূর্ণ নাম"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             className="w-full glass-strong rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -225,10 +277,14 @@ const StudentProfile = () => {
           <label className="text-xs text-muted-foreground">মোবাইল নাম্বার</label>
           <input
             type="tel"
+            inputMode="numeric"
+            maxLength={14}
+            placeholder="01XXXXXXXXX"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="w-full glass-strong rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
+          <p className="text-[10px] text-muted-foreground mt-1">১১ ডিজিট বাংলাদেশি মোবাইল নাম্বার (উদাহরণ: 017xxxxxxxx)</p>
         </div>
         <button
           onClick={handleSave}
