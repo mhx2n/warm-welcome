@@ -76,7 +76,7 @@ interface PdfConfig {
 // Render text with inline math (KaTeX) into an HTML string
 function renderInline(text: string): string {
   if (!text) return "";
-  let s = String(text);
+  const s = String(text);
   // escape HTML first, but preserve math regions
   const tokens: { type: "text" | "math"; value: string; display?: boolean }[] = [];
   const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
