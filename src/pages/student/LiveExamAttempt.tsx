@@ -51,10 +51,15 @@ const LiveExamAttempt = () => {
       }
       setLiveExam(le as LiveExam);
 
-      // Fetch exam config for negative marking
-      const { data: examRow } = await supabase.from("exams")
-        .select("negative_marking").eq("id", le.exam_id).maybeSingle();
-      setNegativeMarking(Number(examRow?.negative_marking || 0));
+      // Negative marking: prefer the live exam override; fall back to the source exam's value.
+      const liveNeg = (le as any).negative_marking;
+      if (liveNeg !== null && liveNeg !== undefined) {
+        setNegativeMarking(Number(liveNeg));
+      } else {
+        const { data: examRow } = await supabase.from("exams")
+          .select("negative_marking").eq("id", le.exam_id).maybeSingle();
+        setNegativeMarking(Number(examRow?.negative_marking || 0));
+      }
 
       const { data: q } = await supabase.from("questions").select("id,question,options,answer,section")
         .eq("exam_id", le.exam_id).order("sort_order");
