@@ -144,14 +144,11 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 }
 
 function pageStyles(cfg: PdfConfig): string {
-  // Reserve vertical room for the absolutely-positioned footer so that
-  // the flex body never bleeds underneath it.
-  const footerH = cfg.showFooter ? 36 : 0;
   const footerBottom = Math.max(8, cfg.pageMargin / 2);
   return `
     .pdf-page{
       width:${A4_W}px;height:${A4_H}px;
-      padding:${cfg.pageMargin}px ${cfg.pageMargin}px ${cfg.pageMargin + footerH}px ${cfg.pageMargin}px;
+      padding:${cfg.pageMargin}px ${cfg.pageMargin}px ${footerBottom}px ${cfg.pageMargin}px;
       box-sizing:border-box;
       background:#ffffff;color:#0f172a;
       font-family:'Noto Sans Bengali','Inter','Hind Siliguri',sans-serif;
@@ -187,7 +184,7 @@ function pageStyles(cfg: PdfConfig): string {
     .ans-line span{font-weight:600;color:#0f172a}
     .exp-line{margin-top:3px;color:#334155;font-weight:400}
     .exp-line b{color:${cfg.primaryColor};font-weight:700}
-    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${footerBottom}px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
+    .pdf-footer{flex:0 0 auto;margin-top:6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
     .pdf-footer .slot{min-width:0;color:${cfg.primaryColor};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .pdf-footer .slot.left{text-align:left;justify-self:start}
     .pdf-footer .slot.center{text-align:center;justify-self:center}
@@ -199,7 +196,7 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-mini-head .t{font-weight:800}
     /* Debug overlay — only when .debug class is on .pdf-page */
     .pdf-page.debug{outline:2px dashed #ef4444;outline-offset:-1px}
-    .pdf-page.debug::before{content:"";position:absolute;left:${cfg.pageMargin}px;top:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${cfg.pageMargin + footerH}px;border:1px dashed #3b82f6;pointer-events:none;z-index:5}
+    .pdf-page.debug::before{content:"";position:absolute;left:${cfg.pageMargin}px;top:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${footerBottom}px;border:1px dashed #3b82f6;pointer-events:none;z-index:5}
     .pdf-page.debug .pdf-footer{outline:1.5px dashed #16a34a;outline-offset:2px;background:rgba(22,163,74,.06)}
     .pdf-page.debug .pdf-body{background:rgba(59,130,246,.04)}
     .pdf-page.debug::after{content:"page " counter(pg);counter-increment:pg;position:absolute;top:2px;right:6px;font-size:10px;color:#ef4444;font-weight:700;z-index:10}
@@ -309,6 +306,18 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
       body.appendChild(right);
     }
     page.appendChild(body);
+    // Insert a placeholder footer NOW so the flex body reserves the right
+    // height during pagination measurement. We'll swap in the real footer
+    // (with correct page-numbers) after pagination completes.
+    if (cfg.showFooter) {
+      const placeholder = document.createElement("div");
+      placeholder.innerHTML = buildFooterHTML(cfg, 1, 1);
+      const fEl = placeholder.firstElementChild;
+      if (fEl) {
+        fEl.classList.add("pdf-footer-placeholder");
+        page.appendChild(fEl);
+      }
+    }
     stage.appendChild(page);
     return { page, left, right, body };
   };
@@ -350,9 +359,12 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
     }
   }
 
-  // Append footers (need totalPages first)
+  // Replace placeholder footers with the real ones (correct page numbers)
   const total = pages.length;
   pages.forEach((p, idx) => {
+    const old = p.page.querySelector(".pdf-footer-placeholder");
+    if (old) old.remove();
+    if (!cfg.showFooter) return;
     const wrapper = document.createElement("div");
     wrapper.innerHTML = buildFooterHTML(cfg, idx + 1, total);
     if (wrapper.firstElementChild) p.page.appendChild(wrapper.firstElementChild);
