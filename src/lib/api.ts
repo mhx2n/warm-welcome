@@ -443,6 +443,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
         activeThemeId: data.active_theme_id,
         customTheme: data.custom_theme as any || undefined,
         uiLabels: data.ui_labels as any || undefined,
+        reportSettings: (data as any).report_settings as any || undefined,
       };
     },
     () => store.getSiteSettings(),
