@@ -1,9 +1,8 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Document as PdfDocument, Page, View, Text, Image as PdfImage, StyleSheet, Font, pdf, Link } from "@react-pdf/renderer";
-import type { Style } from "@react-pdf/types";
 import katex from "katex";
 import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
 import { Download, Eye, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Settings2, X } from "lucide-react";
@@ -11,114 +10,43 @@ import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
 
-const FONT_BASE = "https://cdn.jsdelivr.net/gh/notofonts/notofonts.github.io@main/fonts/NotoSansBengali/hinted/ttf";
-const PAGE_W = 595.28;
-const PAGE_H = 841.89;
 const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
 const BN_OPT = ["ক", "খ", "গ", "ঘ", "ঙ", "চ", "ছ", "জ"];
 const toBn = (n: number | string) => String(n).replace(/\d/g, (d) => BN_DIGITS[+d]);
-
-let fontsRegistered = false;
-function ensureFonts() {
-  if (fontsRegistered) return;
-  Font.register({
-    family: "NotoBengali",
-    fonts: [
-      { src: `${FONT_BASE}/NotoSansBengali-Regular.ttf`, fontWeight: 400 },
-      { src: `${FONT_BASE}/NotoSansBengali-SemiBold.ttf`, fontWeight: 600 },
-      { src: `${FONT_BASE}/NotoSansBengali-Bold.ttf`, fontWeight: 700 },
-    ],
-  });
-  Font.registerHyphenationCallback((word) => [word]);
-  fontsRegistered = true;
-}
-
-type MathPiece = { url: string; w: number; h: number };
-type PdfStyle = Style | Style[];
-const mathCache = new Map<string, MathPiece>();
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-async function renderMathToImage(latex: string, display: boolean): Promise<MathPiece | null> {
-  const key = `${display ? "D" : "I"}|${latex}`;
-  const cached = mathCache.get(key);
-  if (cached) return cached;
+// A4 @ 96dpi
+const A4_W = 794;
+const A4_H = 1123;
 
-  try {
-    const html = katex.renderToString(latex, {
-      displayMode: display,
-      throwOnError: false,
-      output: "html",
-      strict: false,
-      trust: true,
-    });
-    const host = document.createElement("div");
-    host.style.cssText =
-      "position:fixed;left:-30000px;top:0;background:transparent;font-size:18px;line-height:1.2;color:#0f172a;padding:3px;";
-    host.innerHTML = html;
-    document.body.appendChild(host);
-    const fontReady = (document as globalThis.Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
-    if (fontReady) await fontReady.catch(() => undefined);
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const target = host.firstElementChild as HTMLElement | null;
-    if (!target) {
-      host.remove();
-      return null;
+const FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap";
+let fontPromise: Promise<void> | null = null;
+async function ensureFonts() {
+  if (fontPromise) return fontPromise;
+  fontPromise = (async () => {
+    if (!document.querySelector(`link[data-pdf-fonts]`)) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = FONT_CSS_URL;
+      link.setAttribute("data-pdf-fonts", "1");
+      document.head.appendChild(link);
     }
-    const canvas = await html2canvas(target, { scale: 3, backgroundColor: null, logging: false, useCORS: true });
-    const url = canvas.toDataURL("image/png");
-    const piece = { url, w: canvas.width / 3, h: canvas.height / 3 };
-    host.remove();
-    mathCache.set(key, piece);
-    return piece;
-  } catch {
-    return null;
-  }
+    const fontReady = (document as Document & { fonts?: { ready?: Promise<unknown>; load?: (s: string) => Promise<unknown> } }).fonts;
+    try {
+      if (fontReady?.load) {
+        await Promise.all([
+          fontReady.load('400 14px "Noto Sans Bengali"'),
+          fontReady.load('700 14px "Noto Sans Bengali"'),
+          fontReady.load('600 14px "Noto Sans Bengali"'),
+        ]);
+      }
+      await fontReady?.ready;
+    } catch { /* ignore */ }
+  })();
+  return fontPromise;
 }
 
-type Seg = { kind: "text"; value: string } | { kind: "math"; latex: string; display: boolean };
-
-function tokenize(input: string): Seg[] {
-  if (!input) return [];
-  const out: Seg[] = [];
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(input)) !== null) {
-    if (m.index > last) out.push({ kind: "text", value: input.slice(last, m.index) });
-    if (m[2] != null) out.push({ kind: "math", latex: m[2], display: true });
-    else if (m[4] != null) out.push({ kind: "math", latex: m[4], display: true });
-    else if (m[6] != null) out.push({ kind: "math", latex: m[6], display: false });
-    else if (m[8] != null) out.push({ kind: "math", latex: m[8], display: false });
-    last = m.index + m[0].length;
-  }
-  if (last < input.length) out.push({ kind: "text", value: input.slice(last) });
-  return out;
-}
-
-function collectMath(exam: Exam) {
-  const set = new Map<string, { latex: string; display: boolean }>();
-  const scan = (s?: string) => {
-    if (!s) return;
-    for (const t of tokenize(s)) {
-      if (t.kind !== "math") continue;
-      const key = `${t.display ? "D" : "I"}|${t.latex}`;
-      if (!set.has(key)) set.set(key, { latex: t.latex, display: t.display });
-    }
-  };
-  exam.questions.forEach((q) => {
-    scan(q.question);
-    q.options?.forEach(scan);
-    scan(q.answer);
-    scan(q.explanation);
-  });
-  return [...set.values()];
-}
-
-interface Slot {
-  text: string;
-  link: string;
-}
-
+interface Slot { text: string; link: string }
 interface PdfConfig {
   title: string;
   subtitle: string;
@@ -146,312 +74,277 @@ interface PdfConfig {
   columnGap: number;
   questionGap: number;
   optionGap: number;
+  jpegQuality: number;
+  renderScale: number;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
-type IndexedQuestion = { q: Question; idx: number; h: number };
-type PdfPageData = { left: IndexedQuestion[]; right: IndexedQuestion[] };
-
-const styles = StyleSheet.create({
-  page: { fontFamily: "NotoBengali", color: "#0f172a" },
-  title: { textAlign: "center", fontWeight: 700 },
-  subtitle: { textAlign: "center", color: "#475569" },
-  metaRow: { flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1.1, borderBottomWidth: 1.1 },
-  body: { flexDirection: "row", flexGrow: 1 },
-  col: { flex: 1, flexDirection: "column" },
-  divider: { width: 0.7, alignSelf: "stretch" },
-  qBlock: { flexDirection: "column" },
-  qLineRow: { flexDirection: "row", alignItems: "flex-start" },
-  qNum: { fontWeight: 700, minWidth: 17, paddingRight: 3 },
-  qTextWrap: { flex: 1 },
-  optionRows: { paddingLeft: 17 },
-  optionRow: { flexDirection: "row", alignItems: "flex-start" },
-  optionCell: { width: "50%", flexDirection: "row", alignItems: "flex-start" },
-  optionLabel: { width: 18, fontWeight: 700, color: "#334155" },
-  optionContent: { flex: 1, paddingRight: 4 },
-  answerBox: { borderWidth: 0.65, borderRadius: 3.5 },
-  footer: { position: "absolute", flexDirection: "row", borderTopWidth: 0.6 },
-  inline: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
-});
-
-function mathKey(latex: string, display: boolean) {
-  return `${display ? "D" : "I"}|${latex}`;
-}
-
-function visualUnits(text: string) {
-  let units = 0;
-  for (const ch of text) {
-    if (ch === "\n") continue;
-    if (/\s/.test(ch)) units += 0.35;
-    else if (/[\u0980-\u09FF]/.test(ch)) units += 0.96;
-    else if (/[A-Z]/.test(ch)) units += 0.72;
-    else if (/[a-z0-9]/.test(ch)) units += 0.55;
-    else units += 0.44;
+// Render text with inline math (KaTeX) into an HTML string
+function renderInline(text: string): string {
+  if (!text) return "";
+  let s = String(text);
+  // escape HTML first, but preserve math regions
+  const tokens: { type: "text" | "math"; value: string; display?: boolean }[] = [];
+  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) tokens.push({ type: "text", value: s.slice(last, m.index) });
+    if (m[2] != null) tokens.push({ type: "math", value: m[2], display: true });
+    else if (m[4] != null) tokens.push({ type: "math", value: m[4], display: true });
+    else if (m[6] != null) tokens.push({ type: "math", value: m[6], display: false });
+    else if (m[8] != null) tokens.push({ type: "math", value: m[8], display: false });
+    last = m.index + m[0].length;
   }
-  return units;
-}
+  if (last < s.length) tokens.push({ type: "text", value: s.slice(last) });
 
-function estimateLines(text: string | undefined, width: number, fontSize: number, mathMap?: Map<string, MathPiece>) {
-  if (!text) return 1;
-  const capacity = Math.max(8, width / (fontSize * 0.52));
-  let total = 0;
-  for (const rawLine of String(text).split(/\n/)) {
-    const segs = tokenize(rawLine);
-    let lineUnits = 0;
-    let displayLines = 0;
-    for (const seg of segs.length ? segs : [{ kind: "text", value: rawLine } as Seg]) {
-      if (seg.kind === "text") lineUnits += visualUnits(seg.value);
-      else if (seg.display) displayLines += Math.max(1.5, (mathMap?.get(mathKey(seg.latex, true))?.h || 24) / (fontSize * 0.75));
-      else lineUnits += Math.max(4, visualUnits(seg.latex) * 0.7);
+  const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+  return tokens.map((t) => {
+    if (t.type === "text") return escape(t.value);
+    try {
+      return katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true });
+    } catch {
+      return escape(`$${t.value}$`);
     }
-    total += Math.max(1, Math.ceil(lineUnits / capacity)) + displayLines;
-  }
-  return Math.max(1, Math.ceil(total));
+  }).join("");
 }
 
-function estimateQuestionHeight(q: Question, cfg: PdfConfig, colWidth: number, mathMap: Map<string, MathPiece>) {
-  const qLineH = cfg.questionFontSize * cfg.lineHeight;
-  const optLineH = cfg.optionFontSize * cfg.lineHeight;
-  const bodyW = Math.max(80, colWidth - 18);
-  let h = estimateLines(q.question, bodyW, cfg.questionFontSize, mathMap) * qLineH;
-
-  if (cfg.showQuestionImages && q.questionImage) h += 72;
-
-  const optionRows = Math.ceil((q.options?.length || 0) / 2);
-  for (let row = 0; row < optionRows; row++) {
-    const left = q.options[row * 2] || "";
-    const right = q.options[row * 2 + 1] || "";
-    const cellW = Math.max(55, (bodyW - 4) / 2 - 18);
-    const leftH = estimateLines(left, cellW, cfg.optionFontSize, mathMap) * optLineH;
-    const rightH = estimateLines(right, cellW, cfg.optionFontSize, mathMap) * optLineH;
-    let rowH = Math.max(leftH, rightH, optLineH) + cfg.optionGap;
-    if (cfg.showOptionImages && (q.optionImages?.[row * 2] || q.optionImages?.[row * 2 + 1])) rowH += 38;
-    h += rowH;
-  }
-
-  const correct = resolveCorrectOptionText(q);
-  if (cfg.showAnswers || (cfg.showExplanations && q.explanation)) {
-    h += 9;
-    if (cfg.showAnswers) h += estimateLines(correct || "—", bodyW - 48, cfg.optionFontSize, mathMap) * optLineH;
-    if (cfg.showExplanations && q.explanation) h += estimateLines(q.explanation, bodyW - 44, cfg.optionFontSize, mathMap) * optLineH + 2;
-  }
-
-  return Math.ceil(h + cfg.questionGap + 3);
-}
-
-function paginateQuestions(exam: Exam, cfg: PdfConfig, mathMap: Map<string, MathPiece>) {
-  const contentW = PAGE_W - cfg.pageMargin * 2;
-  const colWidth = cfg.twoColumn ? (contentW - cfg.columnGap - 0.7) / 2 : contentW;
-  const logoH = cfg.showLogo && cfg.logoDataUrl ? cfg.logoHeight + 4 : 0;
-  const headerH = logoH + 26 + (cfg.subtitle ? 14 : 2) + (cfg.showMeta ? 24 : 4);
-  const footerH = cfg.showFooter ? 27 : 8;
-  const bodyH = PAGE_H - cfg.pageMargin * 2 - headerH - footerH;
-  const pages: PdfPageData[] = [];
-  let current: PdfPageData = { left: [], right: [] };
-  let leftH = 0;
-  let rightH = 0;
-
-  const pushPage = () => {
-    if (current.left.length || current.right.length) pages.push(current);
-    current = { left: [], right: [] };
-    leftH = 0;
-    rightH = 0;
-  };
-
-  exam.questions.forEach((q, idx) => {
-    const h = estimateQuestionHeight(q, cfg, colWidth, mathMap);
-    const item = { q, idx, h };
-
-    if (!cfg.twoColumn) {
-      if (leftH + h > bodyH && current.left.length) pushPage();
-      current.left.push(item);
-      leftH += h;
-      return;
-    }
-
-    if (leftH + h <= bodyH || current.left.length === 0) {
-      current.left.push(item);
-      leftH += h;
-      return;
-    }
-    if (rightH + h <= bodyH || current.right.length === 0) {
-      current.right.push(item);
-      rightH += h;
-      return;
-    }
-    pushPage();
-    current.left.push(item);
-    leftH = h;
-  });
-
-  pushPage();
-  return { pages: pages.length ? pages : [{ left: [], right: [] }], bodyH };
-}
-
-const PdfInline = ({
-  text,
-  mathMap,
-  baseStyle,
-  mathHeight,
-  maxWidth,
-}: {
-  text: string;
-  mathMap: Map<string, MathPiece>;
-  baseStyle: PdfStyle;
-  mathHeight: number;
-  maxWidth: number;
-}) => {
-  const segs = tokenize(text || "");
-  if (segs.length === 0) return <Text style={baseStyle}>{text || ""}</Text>;
-  if (segs.length === 1 && segs[0].kind === "text") return <Text style={baseStyle}>{segs[0].value}</Text>;
-
-  return (
-    <View style={styles.inline}>
-      {segs.map((seg, i) => {
-        if (seg.kind === "text") return <Text key={i} style={baseStyle}>{seg.value}</Text>;
-        const piece = mathMap.get(mathKey(seg.latex, seg.display));
-        if (!piece) return <Text key={i} style={baseStyle}>{`$${seg.latex}$`}</Text>;
-        const naturalH = seg.display ? mathHeight * 1.55 : mathHeight;
-        const naturalW = (piece.w / Math.max(1, piece.h)) * naturalH;
-        const w = Math.min(maxWidth * (seg.display ? 0.92 : 0.7), naturalW);
-        const h = (piece.h / Math.max(1, piece.w)) * w;
-        if (seg.display) {
-          return (
-            <View key={i} style={{ width: "100%", alignItems: "center", marginVertical: 1.5 }}>
-              <PdfImage src={piece.url} style={{ width: w, height: h }} />
-            </View>
-          );
-        }
-        return <PdfImage key={i} src={piece.url} style={{ width: w, height: h, marginHorizontal: 1, marginTop: 0.5 }} />;
-      })}
-    </View>
-  );
-};
-
-function PdfSlot({ slot, style }: { slot: Slot; style: PdfStyle }) {
-  if (!slot.text) return null;
-  if (slot.link) return <Link src={slot.link} style={style}>{slot.text}</Link>;
-  return <Text style={style}>{slot.text}</Text>;
-}
-
-function QBlock({ item, cfg, mathMap, colWidth }: { item: IndexedQuestion; cfg: PdfConfig; mathMap: Map<string, MathPiece>; colWidth: number }) {
-  const { q, idx } = item;
+function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const correct = resolveCorrectOptionText(q);
   const correctIdx = q.options.findIndex((o) => o === correct);
-  const correctLbl = correctIdx >= 0 ? BN_OPT[correctIdx] || `${correctIdx + 1}` : "";
-  const qStyle = { fontSize: cfg.questionFontSize, lineHeight: cfg.lineHeight, color: "#0f172a", fontWeight: 700 as const };
-  const optStyle = { fontSize: cfg.optionFontSize, lineHeight: cfg.lineHeight, color: "#1f2937" };
-  const answerStyle = { fontSize: cfg.optionFontSize, lineHeight: cfg.lineHeight, color: cfg.primaryColor, fontWeight: 700 as const };
-  const expStyle = { fontSize: cfg.optionFontSize, lineHeight: cfg.lineHeight, color: "#334155" };
+  const correctLbl = correctIdx >= 0 ? (BN_OPT[correctIdx] || `${correctIdx + 1}`) : "";
 
-  return (
-    <View style={[styles.qBlock, { marginBottom: cfg.questionGap }]} wrap={false}>
-      <View style={styles.qLineRow}>
-        <Text style={[styles.qNum, { fontSize: cfg.questionFontSize, lineHeight: cfg.lineHeight, color: cfg.primaryColor }]}>{toBn(idx + 1)}.</Text>
-        <View style={styles.qTextWrap}>
-          <PdfInline text={q.question} mathMap={mathMap} baseStyle={qStyle} mathHeight={cfg.questionFontSize + 2} maxWidth={colWidth - 20} />
-          {cfg.showQuestionImages && q.questionImage ? (
-            <PdfImage src={q.questionImage} style={{ width: Math.min(colWidth - 24, 180), maxHeight: 68, objectFit: "contain", marginTop: 3 }} />
-          ) : null}
-        </View>
-      </View>
+  const optionsHtml = (q.options || []).map((opt, i) => `
+    <div class="opt">
+      <span class="opt-lbl">${BN_OPT[i] || toBn(i + 1)}.</span>
+      <span class="opt-txt">${renderInline(opt)}${cfg.showOptionImages && q.optionImages?.[i] ? `<img class="opt-img" src="${q.optionImages[i]}" alt=""/>` : ""}</span>
+    </div>
+  `).join("");
 
-      <View style={[styles.optionRows, { marginTop: 2 }]}>
-        {Array.from({ length: Math.ceil((q.options?.length || 0) / 2) }).map((_, row) => (
-          <View key={row} style={[styles.optionRow, { marginTop: row === 0 ? 0 : cfg.optionGap }]}>
-            {[0, 1].map((offset) => {
-              const i = row * 2 + offset;
-              const opt = q.options?.[i];
-              if (opt == null) return <View key={offset} style={styles.optionCell} />;
-              return (
-                <View key={offset} style={styles.optionCell}>
-                  <Text style={[styles.optionLabel, { fontSize: cfg.optionFontSize, lineHeight: cfg.lineHeight, color: cfg.primaryColor }]}>{BN_OPT[i] || toBn(i + 1)}.</Text>
-                  <View style={styles.optionContent}>
-                    <PdfInline text={opt} mathMap={mathMap} baseStyle={optStyle} mathHeight={cfg.optionFontSize + 1} maxWidth={(colWidth - 44) / 2} />
-                    {cfg.showOptionImages && q.optionImages?.[i] ? (
-                      <PdfImage src={q.optionImages[i] || ""} style={{ width: Math.min((colWidth - 48) / 2, 84), maxHeight: 34, objectFit: "contain", marginTop: 2 }} />
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ))}
-      </View>
+  const showAnsBlock = cfg.showAnswers || (cfg.showExplanations && q.explanation);
+  const ansBlock = showAnsBlock ? `
+    <div class="ans-box">
+      ${cfg.showAnswers ? `<div class="ans-line"><b>সঠিক উত্তর:</b> ${correctLbl ? `<b>${correctLbl}.</b> ` : ""}<span>${renderInline(correct || "—")}</span></div>` : ""}
+      ${cfg.showExplanations && q.explanation ? `<div class="exp-line"><b>ব্যাখ্যা:</b> <span>${renderInline(q.explanation)}</span></div>` : ""}
+    </div>` : "";
 
-      {(cfg.showAnswers || (cfg.showExplanations && q.explanation)) && (
-        <View style={[styles.answerBox, { marginLeft: 17, marginTop: 4, padding: 4.5, backgroundColor: cfg.answerBg, borderColor: cfg.borderColor }]}>
-          {cfg.showAnswers && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
-              <Text style={answerStyle}>সঠিক উত্তর: {correctLbl ? `${correctLbl}. ` : ""}</Text>
-              <PdfInline text={correct || "—"} mathMap={mathMap} baseStyle={answerStyle} mathHeight={cfg.optionFontSize + 1} maxWidth={colWidth - 75} />
-            </View>
-          )}
-          {cfg.showExplanations && q.explanation && (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: cfg.showAnswers ? 1.5 : 0 }}>
-              <Text style={answerStyle}>ব্যাখ্যা: </Text>
-              <PdfInline text={q.explanation} mathMap={mathMap} baseStyle={expStyle} mathHeight={cfg.optionFontSize + 1} maxWidth={colWidth - 72} />
-            </View>
-          )}
-        </View>
-      )}
-    </View>
-  );
+  const qImg = cfg.showQuestionImages && q.questionImage ? `<img class="q-img" src="${q.questionImage}" alt=""/>` : "";
+
+  return `
+    <div class="q">
+      <div class="q-head">
+        <span class="q-num">${toBn(idx + 1)}.</span>
+        <span class="q-text">${renderInline(q.question)}</span>
+      </div>
+      ${qImg}
+      <div class="opts">${optionsHtml}</div>
+      ${ansBlock}
+    </div>
+  `;
 }
 
-function ExamPdfDoc({ exam, cfg, mathMap }: { exam: Exam; cfg: PdfConfig; mathMap: Map<string, MathPiece> }) {
-  const { pages, bodyH } = paginateQuestions(exam, cfg, mathMap);
+function pageStyles(cfg: PdfConfig): string {
+  return `
+    .pdf-page{
+      width:${A4_W}px;height:${A4_H}px;
+      padding:${cfg.pageMargin}px;
+      box-sizing:border-box;
+      background:#ffffff;color:#0f172a;
+      font-family:'Noto Sans Bengali','Inter','Hind Siliguri',sans-serif;
+      font-size:${cfg.baseFontSize}px;line-height:${cfg.lineHeight};
+      display:flex;flex-direction:column;
+      position:relative;
+      font-feature-settings:"liga","calt","kern","clig";
+      text-rendering:optimizeLegibility;
+      -webkit-font-smoothing:antialiased;
+    }
+    .pdf-header{margin-bottom:6px}
+    .pdf-logo{display:block;margin:0 auto 4px;height:${cfg.logoHeight}px;object-fit:contain}
+    .pdf-title{text-align:center;font-weight:800;font-size:${cfg.questionFontSize + 8}px;color:${cfg.primaryColor};margin:0;letter-spacing:.2px}
+    .pdf-sub{text-align:center;font-size:${cfg.baseFontSize + 0.5}px;color:#475569;margin-top:2px}
+    .pdf-meta{display:flex;justify-content:space-between;align-items:center;border-top:1.1px solid ${cfg.primaryColor};border-bottom:1.1px solid ${cfg.primaryColor};padding:5px 4px;margin-top:8px;font-size:${cfg.baseFontSize}px;color:${cfg.primaryColor};font-weight:600}
+    .pdf-body{flex:1 1 auto;display:flex;gap:${cfg.columnGap}px;margin-top:8px;min-height:0;overflow:hidden}
+    .pdf-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+    .pdf-divider{width:0.7px;background:${cfg.borderColor};align-self:stretch}
+    .q{margin-bottom:${cfg.questionGap}px;page-break-inside:avoid;break-inside:avoid}
+    .q-head{display:flex;align-items:flex-start;gap:5px;font-size:${cfg.questionFontSize}px;font-weight:700;line-height:${cfg.lineHeight}}
+    .q-num{color:${cfg.primaryColor};font-weight:800;flex:0 0 auto}
+    .q-text{flex:1 1 auto;min-width:0;word-wrap:break-word}
+    .q-img{display:block;margin:4px 0 0 18px;max-width:60%;max-height:90px;object-fit:contain}
+    .opts{margin-top:3px;margin-left:18px;display:grid;grid-template-columns:1fr 1fr;column-gap:8px;row-gap:${cfg.optionGap}px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
+    .opt{display:flex;align-items:flex-start;gap:4px;color:#1f2937}
+    .opt-lbl{color:${cfg.primaryColor};font-weight:700;flex:0 0 auto}
+    .opt-txt{flex:1 1 auto;min-width:0;word-wrap:break-word}
+    .opt-img{display:block;margin-top:2px;max-width:100%;max-height:48px;object-fit:contain}
+    .ans-box{margin:5px 0 0 18px;padding:6px 8px;border:0.7px solid ${cfg.borderColor};background:${cfg.answerBg};border-radius:5px;font-size:${cfg.optionFontSize}px;line-height:${cfg.lineHeight}}
+    .ans-line{color:${cfg.primaryColor};font-weight:600}
+    .ans-line span{font-weight:500;color:#0f172a}
+    .exp-line{margin-top:2px;color:#334155}
+    .exp-line b{color:${cfg.primaryColor}}
+    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${Math.max(8, cfg.pageMargin / 2)}px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
+    .pdf-footer .slot{flex:1;min-width:0;color:${cfg.primaryColor};font-weight:600}
+    .pdf-footer .slot.center{text-align:center;flex:1.2}
+    .pdf-footer .slot.right{text-align:right}
+    .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
+    /* KaTeX tweaks for inline pdf */
+    .katex{font-size:1em !important;line-height:1.2 !important}
+    .katex-display{margin:.25em 0 !important;text-align:left}
+    .katex-display>.katex{text-align:left}
+  `;
+}
+
+function buildPageHeaderHTML(exam: Exam, cfg: PdfConfig): string {
   const marks = cfg.marksOverride.trim() || String(exam.questions.length);
-  const contentW = PAGE_W - cfg.pageMargin * 2;
-  const colWidth = cfg.twoColumn ? (contentW - cfg.columnGap - 0.7) / 2 : contentW;
+  return `
+    <div class="pdf-header">
+      ${cfg.showLogo && cfg.logoDataUrl ? `<img class="pdf-logo" src="${cfg.logoDataUrl}" alt=""/>` : ""}
+      <h1 class="pdf-title">${escapeHtml(cfg.title || exam.title)}</h1>
+      ${cfg.subtitle ? `<div class="pdf-sub">${escapeHtml(cfg.subtitle)}</div>` : ""}
+      ${cfg.showMeta ? `
+        <div class="pdf-meta">
+          <span>পূর্ণমান: ${toBn(marks)}</span>
+          <span>সেট: ${escapeHtml(cfg.setLabel || "—")}</span>
+          <span>সময়: ${toBn(exam.duration)} মিনিট</span>
+        </div>` : ""}
+    </div>
+  `;
+}
 
-  return (
-    <PdfDocument title={cfg.title || exam.title} author="Lovable PDF Exporter">
-      {pages.map((pg, pageIdx) => (
-        <Page key={pageIdx} size="A4" style={[styles.page, { padding: cfg.pageMargin, fontSize: cfg.baseFontSize, lineHeight: cfg.lineHeight }]}>
-          <View>
-            {cfg.showLogo && cfg.logoDataUrl ? (
-              <PdfImage src={cfg.logoDataUrl} style={{ height: cfg.logoHeight, alignSelf: "center", objectFit: "contain", marginBottom: 3 }} />
-            ) : null}
-            <Text style={[styles.title, { fontSize: cfg.questionFontSize + 8, color: cfg.primaryColor }]}>{cfg.title || exam.title}</Text>
-            {cfg.subtitle ? <Text style={[styles.subtitle, { fontSize: cfg.baseFontSize + 0.5, marginTop: 1 }]}>{cfg.subtitle}</Text> : null}
-            {cfg.showMeta ? (
-              <View style={[styles.metaRow, { borderColor: cfg.primaryColor, paddingVertical: 4, marginTop: 6, fontSize: cfg.baseFontSize, color: cfg.primaryColor }]}>
-                <Text>পূর্ণমান: {toBn(marks)}</Text>
-                <Text>সেট: {cfg.setLabel || "—"}</Text>
-                <Text>সময়: {toBn(exam.duration)} মিনিট</Text>
-              </View>
-            ) : null}
-          </View>
+function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): string {
+  if (!cfg.showFooter) return "";
+  const slot = (s: Slot, cls: string) => {
+    if (!s.text) return `<div class="slot ${cls}"></div>`;
+    if (s.link) return `<div class="slot ${cls}"><a href="${escapeAttr(s.link)}" style="color:inherit;text-decoration:none">${escapeHtml(s.text)}</a></div>`;
+    return `<div class="slot ${cls}">${escapeHtml(s.text)}</div>`;
+  };
+  return `
+    <div class="pdf-footer">
+      ${slot(cfg.footer.left, "left")}
+      ${slot(cfg.footer.center, "center")}
+      <div class="slot right">
+        ${cfg.footer.right.text ? (cfg.footer.right.link ? `<a href="${escapeAttr(cfg.footer.right.link)}" style="color:inherit;text-decoration:none">${escapeHtml(cfg.footer.right.text)}</a>` : escapeHtml(cfg.footer.right.text)) : ""}
+        ${cfg.showPageNumbers ? `<div class="pn">পৃষ্ঠা ${toBn(pageNum)} / ${toBn(totalPages)}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
 
-          <View style={[styles.body, { height: bodyH, marginTop: 8 }]}>
-            <View style={styles.col}>
-              {pg.left.map((item) => <QBlock key={item.q.id || `l-${pageIdx}-${item.idx}`} item={item} cfg={cfg} mathMap={mathMap} colWidth={colWidth} />)}
-            </View>
-            {cfg.twoColumn ? (
-              <>
-                <View style={[styles.divider, { backgroundColor: cfg.borderColor, marginHorizontal: cfg.columnGap / 2 }]} />
-                <View style={styles.col}>
-                  {pg.right.map((item) => <QBlock key={item.q.id || `r-${pageIdx}-${item.idx}`} item={item} cfg={cfg} mathMap={mathMap} colWidth={colWidth} />)}
-                </View>
-              </>
-            ) : null}
-          </View>
+function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-          {cfg.showFooter ? (
-            <View style={[styles.footer, { left: cfg.pageMargin, right: cfg.pageMargin, bottom: Math.max(10, cfg.pageMargin / 2), borderColor: cfg.borderColor, paddingTop: 4, fontSize: Math.max(7.5, cfg.baseFontSize - 1), color: "#475569" }]} fixed>
-              <View style={{ flex: 1, paddingRight: 4 }}><PdfSlot slot={cfg.footer.left} style={{ color: cfg.primaryColor }} /></View>
-              <View style={{ flex: 1.2, alignItems: "center", paddingHorizontal: 4 }}><PdfSlot slot={cfg.footer.center} style={{ color: cfg.primaryColor }} /></View>
-              <View style={{ flex: 1, alignItems: "flex-end", paddingLeft: 4 }}>
-                <PdfSlot slot={cfg.footer.right} style={{ color: cfg.primaryColor }} />
-                {cfg.showPageNumbers ? <Text render={({ pageNumber, totalPages }) => `পৃষ্ঠা ${toBn(pageNumber)} / ${toBn(totalPages)}`} /> : null}
-              </View>
-            </View>
-          ) : null}
-        </Page>
-      ))}
-    </PdfDocument>
-  );
+async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
+  await ensureFonts();
+  onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
+
+  // Off-screen render container
+  const stage = document.createElement("div");
+  stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;";
+  const styleEl = document.createElement("style");
+  styleEl.textContent = pageStyles(cfg);
+  stage.appendChild(styleEl);
+  document.body.appendChild(stage);
+
+  type PageEls = { page: HTMLDivElement; left: HTMLDivElement; right: HTMLDivElement | null; body: HTMLDivElement };
+  const pages: PageEls[] = [];
+
+  const newPage = (): PageEls => {
+    const page = document.createElement("div");
+    page.className = "pdf-page";
+    page.innerHTML = buildPageHeaderHTML(exam, cfg);
+    const body = document.createElement("div");
+    body.className = "pdf-body";
+    const left = document.createElement("div");
+    left.className = "pdf-col";
+    body.appendChild(left);
+    let right: HTMLDivElement | null = null;
+    if (cfg.twoColumn) {
+      const div = document.createElement("div");
+      div.className = "pdf-divider";
+      body.appendChild(div);
+      right = document.createElement("div");
+      right.className = "pdf-col";
+      body.appendChild(right);
+    }
+    page.appendChild(body);
+    stage.appendChild(page);
+    return { page, left, right, body };
+  };
+
+  let cur = newPage();
+  pages.push(cur);
+  let curCol: HTMLDivElement = cur.left;
+
+  const fits = (col: HTMLDivElement) => col.scrollHeight <= col.clientHeight + 1;
+
+  for (let i = 0; i < exam.questions.length; i++) {
+    const q = exam.questions[i];
+    const tmp = document.createElement("div");
+    tmp.innerHTML = buildQuestionHTML(q, i, cfg);
+    const node = tmp.firstElementChild as HTMLElement;
+    curCol.appendChild(node);
+    if (!fits(curCol)) {
+      curCol.removeChild(node);
+      // try right col
+      if (cfg.twoColumn && curCol === cur.left && cur.right) {
+        curCol = cur.right;
+        curCol.appendChild(node);
+        if (!fits(curCol)) {
+          curCol.removeChild(node);
+          cur = newPage();
+          pages.push(cur);
+          curCol = cur.left;
+          curCol.appendChild(node);
+        }
+      } else {
+        cur = newPage();
+        pages.push(cur);
+        curCol = cur.left;
+        curCol.appendChild(node);
+      }
+    }
+  }
+
+  // Append footers (need totalPages first)
+  const total = pages.length;
+  pages.forEach((p, idx) => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildFooterHTML(cfg, idx + 1, total);
+    if (wrapper.firstElementChild) p.page.appendChild(wrapper.firstElementChild);
+  });
+
+  // Wait for any images to load
+  onProgress?.("ছবি লোড হচ্ছে...");
+  const imgs = stage.querySelectorAll("img");
+  await Promise.all(Array.from(imgs).map((img) => new Promise<void>((res) => {
+    if (img.complete && img.naturalWidth > 0) return res();
+    img.onload = () => res();
+    img.onerror = () => res();
+    setTimeout(() => res(), 4000);
+  })));
+
+  // Render each page to canvas, build PDF
+  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+  const pdfW = pdf.internal.pageSize.getWidth();
+  const pdfH = pdf.internal.pageSize.getHeight();
+
+  for (let i = 0; i < pages.length; i++) {
+    onProgress?.(`পেজ রেন্ডার ${toBn(i + 1)}/${toBn(pages.length)}...`);
+    const canvas = await html2canvas(pages[i].page, {
+      scale: cfg.renderScale,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      logging: false,
+      windowWidth: A4_W,
+      windowHeight: A4_H,
+    });
+    const dataUrl = canvas.toDataURL("image/jpeg", cfg.jpegQuality);
+    if (i > 0) pdf.addPage("a4", "portrait");
+    pdf.addImage(dataUrl, "JPEG", 0, 0, pdfW, pdfH, undefined, "FAST");
+    // also add invisible link annotations for footer slots if needed - skipped (raster)
+  }
+
+  stage.remove();
+  return pdf.output("blob");
 }
 
 const emptySlot = (): Slot => ({ text: "", link: "" });
@@ -459,7 +352,7 @@ const DEFAULT_CFG: PdfConfig = {
   title: "",
   subtitle: "",
   logoDataUrl: "",
-  logoHeight: 28,
+  logoHeight: 32,
   showLogo: true,
   showMeta: true,
   showFooter: true,
@@ -474,14 +367,16 @@ const DEFAULT_CFG: PdfConfig = {
   borderColor: "#bcd4e6",
   setLabel: "A",
   marksOverride: "",
-  baseFontSize: 9.2,
-  questionFontSize: 9.6,
-  optionFontSize: 8.9,
-  lineHeight: 1.42,
-  pageMargin: 30,
-  columnGap: 14,
-  questionGap: 6,
-  optionGap: 2.2,
+  baseFontSize: 11,
+  questionFontSize: 11.5,
+  optionFontSize: 10.5,
+  lineHeight: 1.45,
+  pageMargin: 32,
+  columnGap: 16,
+  questionGap: 8,
+  optionGap: 3,
+  jpegQuality: 0.85,
+  renderScale: 2,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
@@ -514,73 +409,46 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
   const onLogo = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 1024 * 1024) {
-      toast({ title: "লোগো ১MB এর মধ্যে হতে হবে", variant: "destructive" });
-      return;
-    }
+    if (f.size > 1024 * 1024) { toast({ title: "লোগো ১MB এর মধ্যে হতে হবে", variant: "destructive" }); return; }
     const reader = new FileReader();
     reader.onload = () => setCfg((c) => ({ ...c, logoDataUrl: String(reader.result || "") }));
     reader.readAsDataURL(f);
   };
 
-  const buildBlob = async () => {
-    if (!questionCount) throw new Error("প্রশ্ন নেই");
-    ensureFonts();
-    const mathItems = collectMath(exam);
-    const mathMap = new Map<string, MathPiece>();
-    if (mathItems.length) setProgress(`LaTeX প্রস্তুত... ০/${toBn(mathItems.length)}`);
-    for (let i = 0; i < mathItems.length; i++) {
-      const item = mathItems[i];
-      const piece = await renderMathToImage(item.latex, item.display);
-      if (piece) mathMap.set(mathKey(item.latex, item.display), piece);
-      setProgress(`LaTeX প্রস্তুত... ${toBn(i + 1)}/${toBn(mathItems.length)}`);
-    }
-    setProgress("PDF layout সাজানো হচ্ছে...");
-    return pdf(<ExamPdfDoc exam={exam} cfg={cfg} mathMap={mathMap} />).toBlob();
-  };
-
   const downloadPdf = async () => {
+    if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
     setGenerating(true);
     try {
-      const blob = await buildBlob();
+      const blob = await buildPdf(exam, cfg, setProgress);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeFileName(cfg.title || exam.title)}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = `${safeFileName(cfg.title || exam.title)}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast({ title: `PDF তৈরি হয়েছে ✅`, description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
+      toast({ title: "PDF তৈরি হয়েছে ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
     } catch (err: unknown) {
       console.error("PDF gen error", err);
       toast({ title: "PDF তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
-    } finally {
-      setGenerating(false);
-      setProgress("");
-    }
+    } finally { setGenerating(false); setProgress(""); }
   };
 
   const previewPdf = async () => {
+    if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
     setPreviewing(true);
     try {
-      const blob = await buildBlob();
-      const nextUrl = URL.createObjectURL(blob);
+      const blob = await buildPdf(exam, cfg, setProgress);
+      const next = URL.createObjectURL(blob);
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-      previewRef.current = nextUrl;
-      setPreviewUrl(nextUrl);
+      previewRef.current = next;
+      setPreviewUrl(next);
       toast({ title: "প্রিভিউ প্রস্তুত ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
     } catch (err: unknown) {
       console.error("PDF preview error", err);
       toast({ title: "প্রিভিউ তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
-    } finally {
-      setPreviewing(false);
-      setProgress("");
-    }
+    } finally { setPreviewing(false); setProgress(""); }
   };
 
   if (!open) return null;
-
   const busy = generating || previewing;
 
   return createPortal(
@@ -590,7 +458,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
           <div className="flex items-start justify-between gap-3 p-4 md:p-5 border-b border-border shrink-0">
             <div>
               <h2 className="font-bold text-lg flex items-center gap-2"><Settings2 size={18} /> PDF এক্সপোর্ট</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Vector text • Noto Sans Bengali • Auto height pagination • Live preview</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Browser-shaped Bengali • KaTeX math • Auto pagination • Live preview</p>
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg" aria-label="বন্ধ করুন"><X size={16} /></button>
           </div>
@@ -605,7 +473,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
               </section>
 
               <section className="grid sm:grid-cols-2 gap-3">
-                <NumberInput label="লোগো উচ্চতা" value={cfg.logoHeight} min={16} max={60} step={1} onChange={(v) => updateCfg("logoHeight", v)} />
+                <NumberInput label="লোগো উচ্চতা" value={cfg.logoHeight} min={16} max={64} step={1} onChange={(v) => updateCfg("logoHeight", v)} />
                 <div>
                   <label className="text-xs text-muted-foreground">লোগো</label>
                   <label className="flex items-center gap-2 mt-1 px-3 py-2 rounded-lg border border-border cursor-pointer text-xs hover:bg-muted/60">
@@ -624,24 +492,33 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
               <section>
                 <h3 className="text-xs font-bold mb-2">লে-আউট কাস্টমাইজ</h3>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  <NumberInput label="পেজ মার্জিন" value={cfg.pageMargin} min={20} max={48} step={1} onChange={(v) => updateCfg("pageMargin", v)} />
-                  <NumberInput label="কলাম gap" value={cfg.columnGap} min={8} max={24} step={1} onChange={(v) => updateCfg("columnGap", v)} />
-                  <NumberInput label="প্রশ্ন gap" value={cfg.questionGap} min={2} max={14} step={0.5} onChange={(v) => updateCfg("questionGap", v)} />
-                  <NumberInput label="অপশন gap" value={cfg.optionGap} min={1} max={8} step={0.5} onChange={(v) => updateCfg("optionGap", v)} />
+                  <NumberInput label="পেজ মার্জিন" value={cfg.pageMargin} min={20} max={56} step={1} onChange={(v) => updateCfg("pageMargin", v)} />
+                  <NumberInput label="কলাম gap" value={cfg.columnGap} min={8} max={28} step={1} onChange={(v) => updateCfg("columnGap", v)} />
+                  <NumberInput label="প্রশ্ন gap" value={cfg.questionGap} min={2} max={20} step={0.5} onChange={(v) => updateCfg("questionGap", v)} />
+                  <NumberInput label="অপশন gap" value={cfg.optionGap} min={1} max={10} step={0.5} onChange={(v) => updateCfg("optionGap", v)} />
                 </div>
               </section>
 
               <section>
                 <h3 className="text-xs font-bold mb-2">ফন্ট ও রঙ</h3>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  <NumberInput label="বেস ফন্ট" value={cfg.baseFontSize} min={7.5} max={12} step={0.1} onChange={(v) => updateCfg("baseFontSize", v)} />
-                  <NumberInput label="প্রশ্ন ফন্ট" value={cfg.questionFontSize} min={8} max={14} step={0.1} onChange={(v) => updateCfg("questionFontSize", v)} />
-                  <NumberInput label="অপশন ফন্ট" value={cfg.optionFontSize} min={7.5} max={12} step={0.1} onChange={(v) => updateCfg("optionFontSize", v)} />
-                  <NumberInput label="লাইন height" value={cfg.lineHeight} min={1.2} max={1.75} step={0.01} onChange={(v) => updateCfg("lineHeight", v)} />
+                  <NumberInput label="বেস ফন্ট" value={cfg.baseFontSize} min={8} max={14} step={0.1} onChange={(v) => updateCfg("baseFontSize", v)} />
+                  <NumberInput label="প্রশ্ন ফন্ট" value={cfg.questionFontSize} min={9} max={16} step={0.1} onChange={(v) => updateCfg("questionFontSize", v)} />
+                  <NumberInput label="অপশন ফন্ট" value={cfg.optionFontSize} min={8} max={14} step={0.1} onChange={(v) => updateCfg("optionFontSize", v)} />
+                  <NumberInput label="লাইন height" value={cfg.lineHeight} min={1.2} max={1.8} step={0.01} onChange={(v) => updateCfg("lineHeight", v)} />
                   <ColorInput label="প্রাইমারি" value={cfg.primaryColor} onChange={(v) => updateCfg("primaryColor", v)} />
                   <ColorInput label="উত্তর বক্স" value={cfg.answerBg} onChange={(v) => updateCfg("answerBg", v)} />
                   <ColorInput label="বর্ডার" value={cfg.borderColor} onChange={(v) => updateCfg("borderColor", v)} />
                 </div>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-bold mb-2">কোয়ালিটি</h3>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <NumberInput label="রেন্ডার scale (1.5–3)" value={cfg.renderScale} min={1.2} max={3} step={0.1} onChange={(v) => updateCfg("renderScale", v)} />
+                  <NumberInput label="JPEG কোয়ালিটি (.5–.95)" value={cfg.jpegQuality} min={0.5} max={0.95} step={0.01} onChange={(v) => updateCfg("jpegQuality", v)} />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5">বেশি = তীক্ষ্ণ কিন্তু বড় ফাইল। সাধারণত scale ২ + কোয়ালিটি ০.৮৫ যথেষ্ট।</p>
               </section>
 
               <section>
@@ -687,8 +564,8 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 ) : (
                   <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center px-6 text-muted-foreground">
                     <Eye size={34} className="mb-3 opacity-70" />
-                    <p className="text-sm font-semibold text-foreground">প্রিভিউ আবার ফিরিয়ে দেওয়া হয়েছে</p>
-                    <p className="text-xs mt-1 max-w-sm">সেটিংস বদলানোর পর “প্রিভিউ” চাপলে একই vector PDF আগে দেখে তারপর ডাউনলোড করতে পারবেন।</p>
+                    <p className="text-sm font-semibold text-foreground">প্রিভিউ এখানে দেখাবে</p>
+                    <p className="text-xs mt-1 max-w-sm">সেটিংস বদলে "প্রিভিউ" চাপলে এখানে আসবে — তারপর নিশ্চিন্তে ডাউনলোড।</p>
                   </div>
                 )}
               </div>
@@ -714,15 +591,9 @@ function NumberInput({ label, value, onChange, min, max, step }: { label: string
   return (
     <label className="block">
       <span className="text-xs text-muted-foreground">{label}</span>
-      <input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
+      <input type="number" value={value} min={min} max={max} step={step}
         onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))}
-        className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-      />
+        className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm" />
     </label>
   );
 }
