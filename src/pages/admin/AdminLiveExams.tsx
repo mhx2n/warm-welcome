@@ -197,7 +197,7 @@ const AdminLiveExams = () => {
       const top3 = sorted.slice(0, 3);
       if (top3.length > 0) {
         const podiumY = y;
-        const podiumH = 56;
+        const podiumH = 78;
         // Background card
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(10, podiumY, W - 20, podiumH, 3, 3, "F");
@@ -205,32 +205,32 @@ const AdminLiveExams = () => {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
         doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-        doc.text("TOP PERFORMERS", W / 2, podiumY + 6.5, { align: "center" });
+        doc.text("TOP PERFORMERS", W / 2, podiumY + 7, { align: "center" });
 
         const slots: { rank: number; idx: number; medal: string; medalRgb: [number, number, number]; tileH: number }[] = [
-          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 22 },
-          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 30 },
-          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 18 },
+          { rank: 2, idx: 1, medal: "2nd", medalRgb: silverRgb, tileH: 18 },
+          { rank: 1, idx: 0, medal: "1st", medalRgb: goldRgb, tileH: 24 },
+          { rank: 3, idx: 2, medal: "3rd", medalRgb: bronzeRgb, tileH: 14 },
         ];
         const slotW = (W - 40) / 3;
         slots.forEach((s, sIdx) => {
           const p = top3[s.idx];
           if (!p) return;
           const cx = 20 + slotW * sIdx + slotW / 2;
-          const tileBottom = podiumY + podiumH - 4;
+          const tileBottom = podiumY + podiumH - 3;
           const tileTop = tileBottom - s.tileH;
           // Tile (podium bar)
           doc.setFillColor(s.medalRgb[0], s.medalRgb[1], s.medalRgb[2]);
           doc.roundedRect(cx - slotW / 2 + 6, tileTop, slotW - 12, s.tileH, 2, 2, "F");
           doc.setTextColor(255, 255, 255);
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(s.medal === "1st" ? 14 : 11);
-          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 2, { align: "center" });
+          doc.setFontSize(s.medal === "1st" ? 13 : 10);
+          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 1.5, { align: "center" });
 
-          // Avatar above tile
+          // Avatar between title and tile
           const avSize = s.medal === "1st" ? 14 : 12;
           const avX = cx - avSize / 2;
-          const avY = tileTop - avSize - 7;
+          const avY = podiumY + 12;
           drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", avX, avY, avSize);
 
           // Name + score
@@ -238,11 +238,11 @@ const AdminLiveExams = () => {
           doc.setFont("helvetica", "bold");
           doc.setFontSize(8.5);
           const name = (profiles[p.user_id]?.full_name || "Unknown").slice(0, 18);
-          doc.text(name, cx, avY + avSize + 3.5, { align: "center" });
+          doc.text(name, cx, avY + avSize + 4, { align: "center" });
           doc.setFont("helvetica", "normal");
           doc.setFontSize(7.5);
           doc.setTextColor(71, 85, 105);
-          doc.text(`${p.score}/${p.max_score} • ${p.percentage.toFixed(1)}%`, cx, avY + avSize + 6.8, { align: "center" });
+          doc.text(`${p.score}/${p.max_score} • ${p.percentage.toFixed(1)}%`, cx, avY + avSize + 7.5, { align: "center" });
         });
         y = podiumY + podiumH + 6;
       }
