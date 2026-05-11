@@ -72,6 +72,7 @@ interface PdfConfig {
   showWatermark: boolean;
   watermarkOpacity: number;
   watermarkSize: number;
+  debugMode: boolean;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
@@ -143,10 +144,14 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 }
 
 function pageStyles(cfg: PdfConfig): string {
+  // Reserve vertical room for the absolutely-positioned footer so that
+  // the flex body never bleeds underneath it.
+  const footerH = cfg.showFooter ? 36 : 0;
+  const footerBottom = Math.max(8, cfg.pageMargin / 2);
   return `
     .pdf-page{
       width:${A4_W}px;height:${A4_H}px;
-      padding:${cfg.pageMargin}px;
+      padding:${cfg.pageMargin}px ${cfg.pageMargin}px ${cfg.pageMargin + footerH}px ${cfg.pageMargin}px;
       box-sizing:border-box;
       background:#ffffff;color:#0f172a;
       font-family:'Noto Sans Bengali','Inter','Hind Siliguri',sans-serif;
@@ -182,15 +187,23 @@ function pageStyles(cfg: PdfConfig): string {
     .ans-line span{font-weight:600;color:#0f172a}
     .exp-line{margin-top:3px;color:#334155;font-weight:400}
     .exp-line b{color:${cfg.primaryColor};font-weight:700}
-    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${Math.max(8, cfg.pageMargin / 2)}px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
-    .pdf-footer .slot{flex:1;min-width:0;color:${cfg.primaryColor};font-weight:600}
-    .pdf-footer .slot.center{text-align:center;flex:1.2}
-    .pdf-footer .slot.right{text-align:right}
+    .pdf-footer{position:absolute;left:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${footerBottom}px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
+    .pdf-footer .slot{min-width:0;color:${cfg.primaryColor};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .pdf-footer .slot.left{text-align:left;justify-self:start}
+    .pdf-footer .slot.center{text-align:center;justify-self:center}
+    .pdf-footer .slot.right{text-align:right;justify-self:end}
     .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
     .pdf-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:${cfg.watermarkOpacity};width:${cfg.watermarkSize}%;max-width:70%;pointer-events:none;z-index:0;object-fit:contain}
     .pdf-header,.pdf-body,.pdf-footer,.pdf-mini-head{position:relative;z-index:1}
     .pdf-mini-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid ${cfg.primaryColor};padding:0 2px 4px;margin-bottom:6px;font-size:${cfg.baseFontSize - 0.5}px;color:${cfg.primaryColor};font-weight:600}
     .pdf-mini-head .t{font-weight:800}
+    /* Debug overlay — only when .debug class is on .pdf-page */
+    .pdf-page.debug{outline:2px dashed #ef4444;outline-offset:-1px}
+    .pdf-page.debug::before{content:"";position:absolute;left:${cfg.pageMargin}px;top:${cfg.pageMargin}px;right:${cfg.pageMargin}px;bottom:${cfg.pageMargin + footerH}px;border:1px dashed #3b82f6;pointer-events:none;z-index:5}
+    .pdf-page.debug .pdf-footer{outline:1.5px dashed #16a34a;outline-offset:2px;background:rgba(22,163,74,.06)}
+    .pdf-page.debug .pdf-body{background:rgba(59,130,246,.04)}
+    .pdf-page.debug::after{content:"page " counter(pg);counter-increment:pg;position:absolute;top:2px;right:6px;font-size:10px;color:#ef4444;font-weight:700;z-index:10}
+    body{counter-reset:pg}
     /* KaTeX tweaks for inline pdf */
     .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
     .math-display{display:block;white-space:normal;margin:.18em 0}
