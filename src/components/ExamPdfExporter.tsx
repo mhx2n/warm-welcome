@@ -574,7 +574,15 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   <Toggle label="ব্যাখ্যা" checked={cfg.showExplanations} onChange={(v) => updateCfg("showExplanations", v)} />
                   <Toggle label="প্রশ্নের ছবি" checked={cfg.showQuestionImages} onChange={(v) => updateCfg("showQuestionImages", v)} />
                   <Toggle label="অপশনের ছবি" checked={cfg.showOptionImages} onChange={(v) => updateCfg("showOptionImages", v)} />
+                  <Toggle label="হেডার শুধু ১ম পৃষ্ঠায়" checked={cfg.headerFirstPageOnly} onChange={(v) => updateCfg("headerFirstPageOnly", v)} />
+                  <Toggle label="লোগো ওয়াটারমার্ক" checked={cfg.showWatermark} onChange={(v) => updateCfg("showWatermark", v)} />
                 </div>
+                {cfg.showWatermark && (
+                  <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                    <NumberInput label="ওয়াটারমার্ক opacity" value={cfg.watermarkOpacity} min={0.02} max={0.25} step={0.01} onChange={(v) => updateCfg("watermarkOpacity", v)} />
+                    <NumberInput label="ওয়াটারমার্ক সাইজ %" value={cfg.watermarkSize} min={20} max={80} step={1} onChange={(v) => updateCfg("watermarkSize", v)} />
+                  </div>
+                )}
               </section>
 
               <section>
