@@ -338,7 +338,8 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
   pages.push(cur);
   let curCol: HTMLDivElement = cur.left;
 
-  const fits = (col: HTMLDivElement) => col.scrollHeight <= col.clientHeight + 1;
+  // Stricter check with safety margin to prevent edge clipping during print.
+  const fits = (col: HTMLDivElement) => col.scrollHeight <= col.clientHeight - 2;
 
   for (let i = 0; i < exam.questions.length; i++) {
     const q = exam.questions[i];
@@ -358,15 +359,14 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
           pages.push(cur);
           curCol = cur.left;
           curCol.appendChild(node);
-          // if still doesn't fit on a fresh page (oversized), allow overflow
-          if (!fits(curCol)) curCol.style.overflow = "visible";
+          // Oversized single question — keep clipped within page (overflow:hidden)
+          // rather than spilling past the footer/page border.
         }
       } else {
         cur = newPage();
         pages.push(cur);
         curCol = cur.left;
         curCol.appendChild(node);
-        if (!fits(curCol)) curCol.style.overflow = "visible";
       }
     }
   }
