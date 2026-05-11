@@ -581,8 +581,10 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     try {
       await printExam(exam, cfg, setProgress);
       toast({
-        title: "প্রিন্ট ডায়ালগ খুলেছে ✅",
-        description: 'গন্তব্য থেকে "Save as PDF" বেছে নিন — ভেক্টর কোয়ালিটি, ছোট ফাইল।',
+        title: cfg.debugMode ? "🐞 Debug প্রিভিউ খুলেছে" : "প্রিন্ট ডায়ালগ খুলেছে ✅",
+        description: cfg.debugMode
+          ? "নতুন ট্যাবে লাল/নীল/সবুজ বক্স দেখে overlap চেক করুন।"
+          : 'গন্তব্য থেকে "Save as PDF" বেছে নিন।',
       });
     } catch (err: unknown) {
       console.error("PDF gen error", err);
