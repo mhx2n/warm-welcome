@@ -47,7 +47,7 @@ const AdminLiveExams = () => {
       supabase.from("live_exams").select("*").order("start_time", { ascending: false }),
     ]);
     if (e.data) setExams(e.data as ExamRow[]);
-    if (l.data) setLiveExams(l.data as LiveExam[]);
+    if (l.data) setLiveExams(l.data as unknown as LiveExam[]);
     setLoading(false);
   };
 
@@ -98,7 +98,7 @@ const AdminLiveExams = () => {
       show_leaderboard: form.show_leaderboard,
       status: "scheduled",
       negative_marking: negVal,
-    });
+    } as any);
     if (error) return toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     toast({ title: "লাইভ পরীক্ষা তৈরি হয়েছে ✅" });
     setShowForm(false);
