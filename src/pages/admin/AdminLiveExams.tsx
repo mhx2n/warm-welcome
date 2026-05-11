@@ -3,10 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Radio, Trash2, Download, Trophy, X, Crown, ImageDown } from "lucide-react";
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
+import notoBengaliUrl from "@/assets/NotoSansBengali-Regular.ttf";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
 import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/reportThemePresets";
-import { ensureBanglaFont, BANGLA_FONT } from "@/lib/pdfBanglaFont";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
 interface ExamDetailRow { id: string; title: string; question_count: number; duration: number; negative_marking: number; }
