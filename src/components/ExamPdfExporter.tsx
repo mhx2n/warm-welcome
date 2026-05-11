@@ -675,6 +675,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   <Toggle label="অপশনের ছবি" checked={cfg.showOptionImages} onChange={(v) => updateCfg("showOptionImages", v)} />
                   <Toggle label="হেডার শুধু ১ম পৃষ্ঠায়" checked={cfg.headerFirstPageOnly} onChange={(v) => updateCfg("headerFirstPageOnly", v)} />
                   <Toggle label="লোগো ওয়াটারমার্ক" checked={cfg.showWatermark} onChange={(v) => updateCfg("showWatermark", v)} />
+                  <Toggle label="🐞 Debug মোড (overlap দেখাও)" checked={cfg.debugMode} onChange={(v) => updateCfg("debugMode", v)} />
                 </div>
                 {cfg.showWatermark && (
                   <div className="grid sm:grid-cols-2 gap-3 mt-3">
