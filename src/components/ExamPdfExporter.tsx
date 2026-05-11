@@ -19,18 +19,10 @@ const errorMessage = (err: unknown) => (err instanceof Error ? err.message : Str
 const A4_W = 794;
 const A4_H = 1123;
 
-const FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap";
 let fontPromise: Promise<void> | null = null;
 async function ensureFonts() {
   if (fontPromise) return fontPromise;
   fontPromise = (async () => {
-    if (!document.querySelector(`link[data-pdf-fonts]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = FONT_CSS_URL;
-      link.setAttribute("data-pdf-fonts", "1");
-      document.head.appendChild(link);
-    }
     const fontReady = (document as Document & { fonts?: { ready?: Promise<unknown>; load?: (s: string) => Promise<unknown> } }).fonts;
     try {
       if (fontReady?.load) {
@@ -236,67 +228,6 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
-
-function collectMath(exam: Exam): { value: string; display: boolean }[] {
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
-  const seen = new Set<string>();
-  const out: { value: string; display: boolean }[] = [];
-  const scan = (s: string | undefined | null) => {
-    if (!s) return;
-    re.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(s)) !== null) {
-      let value = ""; let display = false;
-      if (m[2] != null) { value = m[2]; display = true; }
-      else if (m[4] != null) { value = m[4]; display = true; }
-      else if (m[6] != null) { value = m[6]; display = false; }
-      else if (m[8] != null) { value = m[8]; display = false; }
-      const key = (display ? "D|" : "I|") + value;
-      if (!seen.has(key)) { seen.add(key); out.push({ value, display }); }
-    }
-  };
-  for (const q of exam.questions || []) {
-    scan(q.question);
-    scan(q.explanation);
-    (q.options || []).forEach((o) => scan(o));
-  }
-  return out;
-}
-
-const mathCache = new Map<string, string>();
-
-async function prerenderMathImages(exam: Exam, onProgress?: (msg: string) => void): Promise<Map<string, string>> {
-  const items = collectMath(exam);
-  const result = new Map<string, string>();
-  if (!items.length) return result;
-  const stage = document.createElement("div");
-  stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;background:#fff;padding:8px;font-family:'Noto Sans Bengali','Inter',sans-serif;";
-  document.body.appendChild(stage);
-  let done = 0;
-  for (const it of items) {
-    const cacheKey = (it.display ? "D|" : "I|") + it.value;
-    if (mathCache.has(cacheKey)) {
-      result.set(cacheKey, mathCache.get(cacheKey)!);
-      done++; continue;
-    }
-    try {
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "display:inline-block;padding:2px 4px;background:#ffffff;color:#0f172a;font-size:18px;line-height:1.25;";
-      wrap.innerHTML = katex.renderToString(it.value, { displayMode: it.display, throwOnError: false, output: "html", strict: false, trust: true });
-      stage.appendChild(wrap);
-      await new Promise((r) => requestAnimationFrame(() => r(null)));
-      const canvas = await html2canvas(wrap, { scale: 4, backgroundColor: null, useCORS: true, logging: false });
-      const url = canvas.toDataURL("image/png");
-      result.set(cacheKey, url);
-      mathCache.set(cacheKey, url);
-      stage.removeChild(wrap);
-    } catch { /* skip */ }
-    done++;
-    if (done % 4 === 0) onProgress?.(`ম্যাথ রেন্ডার ${toBn(done)}/${toBn(items.length)}...`);
-  }
-  stage.remove();
-  return result;
-}
 
 async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
   await ensureFonts();
