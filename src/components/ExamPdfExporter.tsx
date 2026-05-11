@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import type { ComponentProps } from "react";
 import { createPortal } from "react-dom";
 import { Document, Page, View, Text, Image as PdfImage, StyleSheet, Font, pdf, Link } from "@react-pdf/renderer";
-import type { Style } from "@react-pdf/types";
 import katex from "katex";
 import html2canvas from "html2canvas";
 import "katex/dist/katex.min.css";
@@ -34,6 +34,7 @@ function ensureFonts() {
 }
 
 type MathPiece = { url: string; w: number; h: number };
+type PdfStyle = NonNullable<ComponentProps<typeof Text>["style"]>;
 const mathCache = new Map<string, MathPiece>();
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -296,7 +297,7 @@ const PdfInline = ({
 }: {
   text: string;
   mathMap: Map<string, MathPiece>;
-  baseStyle: Style;
+  baseStyle: PdfStyle;
   mathHeight: number;
   maxWidth: number;
 }) => {
@@ -327,7 +328,7 @@ const PdfInline = ({
   );
 };
 
-function PdfSlot({ slot, style }: { slot: Slot; style: Style }) {
+function PdfSlot({ slot, style }: { slot: Slot; style: PdfStyle }) {
   if (!slot.text) return null;
   if (slot.link) return <Link src={slot.link} style={style}>{slot.text}</Link>;
   return <Text style={style}>{slot.text}</Text>;
