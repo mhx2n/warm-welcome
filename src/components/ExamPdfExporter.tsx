@@ -449,39 +449,23 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     } finally { setGenerating(false); setProgress(""); }
   };
 
-  const previewPdf = async () => {
-    if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
-    setPreviewing(true);
-    try {
-      const blob = await buildPdf(exam, cfg, setProgress);
-      const next = URL.createObjectURL(blob);
-      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-      previewRef.current = next;
-      setPreviewUrl(next);
-      toast({ title: "প্রিভিউ প্রস্তুত ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
-    } catch (err: unknown) {
-      console.error("PDF preview error", err);
-      toast({ title: "প্রিভিউ তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
-    } finally { setPreviewing(false); setProgress(""); }
-  };
-
   if (!open) return null;
-  const busy = generating || previewing;
+  const busy = generating;
 
   return createPortal(
     <div className="fixed inset-0 z-[200] bg-background/80 backdrop-blur-sm overflow-y-auto p-2 md:p-5">
       <div className="min-h-[calc(100vh-1rem)] flex items-start justify-center">
-        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-6xl flex flex-col overflow-hidden my-2 border border-border">
+        <div className="bg-card rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden my-2 border border-border">
           <div className="flex items-start justify-between gap-3 p-4 md:p-5 border-b border-border shrink-0">
             <div>
               <h2 className="font-bold text-lg flex items-center gap-2"><Settings2 size={18} /> PDF এক্সপোর্ট</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Browser-shaped Bengali • KaTeX math • Auto pagination • Live preview</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">এক ক্লিকে ডাউনলোড • Bengali font • KaTeX math • Auto pagination</p>
             </div>
             <button onClick={onClose} className="p-1.5 hover:bg-muted rounded-lg" aria-label="বন্ধ করুন"><X size={16} /></button>
           </div>
 
-          <div className="grid lg:grid-cols-[420px_1fr] min-h-[calc(100vh-8rem)]">
-            <div className="p-4 md:p-5 space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto border-b lg:border-b-0 lg:border-r border-border">
+          <div className="min-h-[calc(100vh-8rem)]">
+            <div className="p-4 md:p-5 space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto">
               <section className="grid sm:grid-cols-2 gap-3">
                 <TextInput label="শিরোনাম" value={cfg.title} onChange={(v) => updateCfg("title", v)} />
                 <TextInput label="সাবটাইটেল" value={cfg.subtitle} onChange={(v) => updateCfg("subtitle", v)} />
