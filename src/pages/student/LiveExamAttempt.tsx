@@ -32,7 +32,6 @@ const LiveExamAttempt = () => {
   // Post-submit ranking state
   const [allParts, setAllParts] = useState<Participant[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
-  const [showRank, setShowRank] = useState(false);
 
   useEffect(() => {
     if (!id || !user || accessLoading) return;
@@ -262,8 +261,7 @@ const LiveExamAttempt = () => {
   const mins = Math.floor(timeLeft / 60), secs = timeLeft % 60;
   const total = questions.length;
   const answered = Object.keys(answers).length;
-  const liveSorted = [...allParts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
-  const myLiveRank = liveSorted.findIndex((p) => p.user_id === user?.id) + 1;
+  // (Live rankings intentionally omitted during the attempt.)
 
   return (
     <div className="min-h-screen pt-20 pb-20 px-4 max-w-3xl mx-auto">
