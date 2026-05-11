@@ -443,6 +443,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
         activeThemeId: data.active_theme_id,
         customTheme: data.custom_theme as any || undefined,
         uiLabels: data.ui_labels as any || undefined,
+        reportSettings: (data as any).report_settings as any || undefined,
       };
     },
     () => store.getSiteSettings(),
@@ -475,15 +476,16 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       active_theme_id: settings.activeThemeId,
       custom_theme: settings.customTheme as any || null,
       ui_labels: settings.uiLabels as any || null,
+      report_settings: settings.reportSettings as any || null,
     };
 
     if (existing) {
-      const { error } = await supabase.from("site_settings").update(row).eq("id", existing.id);
+      const { error } = await supabase.from("site_settings").update(row as any).eq("id", existing.id);
       if (error) throw error;
       return;
     }
 
-    const { error } = await supabase.from("site_settings").insert(row);
+    const { error } = await supabase.from("site_settings").insert(row as any);
     if (error) throw error;
   }, { action: "সাইট সেটিংস সেভ", suppressConnectivityError: true });
 }
