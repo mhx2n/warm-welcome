@@ -4,6 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Radio, Trash2, Download, Trophy, X, Crown } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { useSiteSettings } from "@/hooks/useSupabaseData";
+import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/reportThemePresets";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
 interface LiveExam {
@@ -15,10 +17,11 @@ interface Participant {
   id: string; user_id: string; score: number; max_score: number; correct: number; wrong: number;
   skipped: number; percentage: number; time_taken_seconds: number; status: string; submitted_at: string | null;
 }
-interface Profile { user_id: string; full_name: string | null; email: string | null; batch_name: string | null; phone: string | null; }
+interface Profile { user_id: string; full_name: string | null; email: string | null; batch_name: string | null; phone: string | null; avatar_url?: string | null; }
 
 const AdminLiveExams = () => {
   const { toast } = useToast();
+  const { data: siteSettings } = useSiteSettings();
   const [exams, setExams] = useState<ExamRow[]>([]);
   const [liveExams, setLiveExams] = useState<LiveExam[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ const AdminLiveExams = () => {
       setParts(data as Participant[]);
       const ids = Array.from(new Set((data as Participant[]).map((x) => x.user_id)));
       if (ids.length) {
-        const { data: pr } = await supabase.from("profiles").select("user_id,full_name,email,batch_name,phone").in("user_id", ids);
+        const { data: pr } = await supabase.from("profiles").select("user_id,full_name,email,batch_name,phone,avatar_url").in("user_id", ids);
         const map: Record<string, Profile> = {};
         (pr || []).forEach((x: any) => { map[x.user_id] = x; });
         setProfiles(map);
