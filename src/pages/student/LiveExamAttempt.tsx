@@ -310,43 +310,8 @@ const LiveExamAttempt = () => {
         })}
       </div>
 
-      {/* Live ranking panel (collapsible) */}
-      {liveExam.show_leaderboard && (
-        <div className="mt-6 glass-card-static p-4">
-          <button onClick={() => setShowRank((s) => !s)} className="w-full flex items-center justify-between text-left">
-            <div className="flex items-center gap-2">
-              <Trophy size={16} className="text-warning" />
-              <span className="text-sm font-bold">লাইভ র‍্যাঙ্কিং ({liveSorted.length})</span>
-              {myLiveRank > 0 && <span className="text-[11px] text-primary">আপনি: #{myLiveRank}</span>}
-            </div>
-            <span className="text-xs text-muted-foreground">{showRank ? "লুকান" : "দেখুন"}</span>
-          </button>
-          {showRank && (
-            <div className="mt-3 space-y-1.5 max-h-80 overflow-y-auto">
-              {liveSorted.map((p, i) => {
-                const pr = profiles[p.user_id];
-                const isMe = p.user_id === user?.id;
-                return (
-                  <div key={p.id} className={`flex items-center gap-3 p-2 rounded-lg ${isMe ? "bg-primary/15 border border-primary/30" : "bg-muted/30"}`}>
-                    <div className="w-7 text-center font-bold text-xs">
-                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}
-                    </div>
-                    {pr?.avatar_url ? <img src={pr.avatar_url} className="w-8 h-8 rounded-full object-cover" alt="" /> :
-                      <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                        {(pr?.full_name || "U")[0]}
-                      </div>}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate">{pr?.full_name || "—"} {isMe && <span className="text-primary">(আপনি)</span>}</p>
-                    </div>
-                    <p className="text-xs font-bold shrink-0">{p.score}/{p.max_score}</p>
-                  </div>
-                );
-              })}
-              {liveSorted.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">এখনও কেউ অংশ নেয়নি</p>}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Live ranking is intentionally hidden during the exam (anti-cheat).
+          Final ranking shows after submit, and on /live-exams portal once the exam is finished. */}
 
       {/* Bottom submit */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-background/95 backdrop-blur border-t border-border p-3">
