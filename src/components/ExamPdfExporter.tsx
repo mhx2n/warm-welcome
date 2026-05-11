@@ -646,7 +646,30 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 </div>
               </section>
 
-              <div className="grid grid-cols-2 gap-2 sticky bottom-0 bg-card pt-2">
+              <div className="sticky bottom-0 bg-card pt-2 space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => { saveDefault(cfg); toast({ title: "ডিফল্ট সেভ হয়েছে ✅", description: "পরের বার এটাই অটো-লোড হবে" }); }}
+                    className="py-2 rounded-lg border border-border text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-muted">
+                    <Save size={13} /> ডিফল্ট সেভ
+                  </button>
+                  <button
+                    onClick={() => {
+                      const saved = loadSavedDefault();
+                      if (!saved) { toast({ title: "কোনো সেভ করা ডিফল্ট নেই", variant: "destructive" }); return; }
+                      setCfg({ ...DEFAULT_CFG, ...saved, title: cfg.title, subtitle: cfg.subtitle });
+                      toast({ title: "সেভ করা ডিফল্ট লোড হয়েছে" });
+                    }}
+                    className="py-2 rounded-lg border border-border text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-muted">
+                    <RefreshCcw size={13} /> ডিফল্ট লোড
+                  </button>
+                  <button
+                    onClick={() => { clearSavedDefault(); setCfg({ ...DEFAULT_CFG, title: cfg.title, subtitle: cfg.subtitle }); toast({ title: "ফ্যাক্টরি রিসেট হয়েছে" }); }}
+                    className="py-2 rounded-lg border border-border text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-muted">
+                    <RotateCcw size={13} /> রিসেট
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                 <button onClick={previewPdf} disabled={busy} className="py-3 rounded-xl border border-border text-sm font-bold flex items-center justify-center gap-2 hover:bg-muted disabled:opacity-50">
                   {previewing ? <Loader2 className="animate-spin" size={16} /> : previewUrl ? <RefreshCcw size={16} /> : <Eye size={16} />}
                   {previewing ? progress || "প্রিভিউ..." : previewUrl ? "প্রিভিউ রিফ্রেশ" : "প্রিভিউ"}
@@ -655,6 +678,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   {generating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
                   {generating ? progress || "তৈরি হচ্ছে..." : "ডাউনলোড"}
                 </button>
+                </div>
               </div>
             </div>
 
