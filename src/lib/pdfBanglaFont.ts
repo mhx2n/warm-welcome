@@ -1,6 +1,6 @@
 import type jsPDF from "jspdf";
+import notoBengaliUrl from "@/assets/NotoSansBengali-Regular.ttf";
 
-const FONT_URL = "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts/hinted/ttf/NotoSansBengali/NotoSansBengali-Regular.ttf";
 const FONT_NAME = "NotoBengali";
 const FONT_FILE = "NotoSansBengali-Regular.ttf";
 
@@ -12,7 +12,7 @@ async function fetchFontBase64(): Promise<string | null> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const res = await fetch(FONT_URL);
+      const res = await fetch(notoBengaliUrl);
       if (!res.ok) return null;
       const buf = await res.arrayBuffer();
       let binary = "";
