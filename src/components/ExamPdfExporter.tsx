@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import katex from "katex";
 import html2canvas from "html2canvas";
@@ -382,14 +382,18 @@ const DEFAULT_CFG: PdfConfig = {
 };
 
 const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
+const PDF_CFG_VERSION = 2;
 function loadSavedDefault(): Partial<PdfConfig> | null {
   try {
     const raw = localStorage.getItem(PDF_DEFAULT_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PdfConfig>;
+    if (parsed.presetVersion === PDF_CFG_VERSION) return parsed;
+    return { ...parsed, renderScale: 2, jpegQuality: 0.82, outputFormat: "jpeg", presetVersion: PDF_CFG_VERSION };
   } catch { return null; }
 }
 function saveDefault(cfg: PdfConfig) {
-  try { localStorage.setItem(PDF_DEFAULT_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
+  try { localStorage.setItem(PDF_DEFAULT_KEY, JSON.stringify({ ...cfg, presetVersion: PDF_CFG_VERSION })); } catch { /* ignore */ }
 }
 function clearSavedDefault() {
   try { localStorage.removeItem(PDF_DEFAULT_KEY); } catch { /* ignore */ }
