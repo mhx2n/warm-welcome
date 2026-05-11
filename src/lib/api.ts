@@ -476,6 +476,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<void> {
       active_theme_id: settings.activeThemeId,
       custom_theme: settings.customTheme as any || null,
       ui_labels: settings.uiLabels as any || null,
+      report_settings: settings.reportSettings as any || null,
     };
 
     if (existing) {
