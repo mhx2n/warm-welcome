@@ -1,8 +1,6 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import katex from "katex";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
 import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
@@ -251,11 +249,16 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
+/**
+ * Build the print-ready HTML (one or more A4 page divs) and trigger
+ * the browser's native print dialog inside a hidden iframe.
+ * Output: vector PDF (Skia/PDF) when user picks "Save as PDF".
+ */
+async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<void> {
   await ensureFonts();
   onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
 
-  // Off-screen render container
+  // Off-screen measuring stage (in current document, so font metrics match)
   const stage = document.createElement("div");
   stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;";
   const styleEl = document.createElement("style");
@@ -352,31 +355,89 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
     setTimeout(() => res(), 4000);
   })));
 
-  // Render each page to canvas, build PDF
-  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
-  const pdfW = pdf.internal.pageSize.getWidth();
-  const pdfH = pdf.internal.pageSize.getHeight();
+  // Collect serialized HTML for each paginated page, then move into a hidden iframe
+  // so the browser's native print produces a vector PDF (Skia/PDF), matching the
+  // reference output. File size and sharpness benefit massively from this.
+  onProgress?.("প্রিন্ট প্রিভিউ খুলছে...");
 
-  for (let i = 0; i < pages.length; i++) {
-    onProgress?.(`পৃষ্ঠা তৈরি ${toBn(i + 1)}/${toBn(pages.length)}...`);
-    const canvas = await html2canvas(pages[i].page, {
-      scale: cfg.renderScale,
-      backgroundColor: "#ffffff",
-      useCORS: true,
-      logging: false,
-      windowWidth: A4_W,
-      windowHeight: A4_H,
-      imageTimeout: 0,
-    });
-    const isPng = cfg.outputFormat === "png";
-    const dataUrl = isPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", cfg.jpegQuality);
-    if (i > 0) pdf.addPage("a4", "portrait");
-    pdf.addImage(dataUrl, isPng ? "PNG" : "JPEG", 0, 0, pdfW, pdfH, undefined, isPng ? "SLOW" : "FAST");
-    // also add invisible link annotations for footer slots if needed - skipped (raster)
-  }
-
+  const pagesHtml = pages.map((p) => p.page.outerHTML).join("\n");
   stage.remove();
-  return pdf.output("blob");
+
+  // Inject KaTeX CSS into the iframe so math renders identically
+  const katexHref = (() => {
+    const link = document.querySelector('link[rel="stylesheet"][href*="katex"]') as HTMLLinkElement | null;
+    return link?.href || "";
+  })();
+  // Capture loaded Bengali font CSS link (if any) for the iframe
+  const fontHrefs = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .map((l) => (l as HTMLLinkElement).href)
+    .filter((h) => /noto.+bengali|hind.?siliguri|fonts\.googleapis|fonts\.gstatic/i.test(h));
+
+  const docHtml = `<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(cfg.title || exam.title || "exam")}</title>
+${katexHref ? `<link rel="stylesheet" href="${escapeAttr(katexHref)}" />` : ""}
+${fontHrefs.map((h) => `<link rel="stylesheet" href="${escapeAttr(h)}" />`).join("\n")}
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  ${pageStyles(cfg)}
+  .pdf-page { page-break-after: always; break-after: page; }
+  .pdf-page:last-child { page-break-after: auto; break-after: auto; }
+  @media print {
+    .pdf-page { box-shadow: none !important; }
+  }
+</style>
+</head>
+<body>
+${pagesHtml}
+</body>
+</html>`;
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      // Remove iframe shortly after print dialog closes
+      setTimeout(() => { try { iframe.remove(); } catch { /* ignore */ } }, 1500);
+    };
+    iframe.onload = async () => {
+      try {
+        const win = iframe.contentWindow;
+        const doc = iframe.contentDocument;
+        if (!win || !doc) throw new Error("Print iframe could not be opened");
+        // Wait for iframe fonts + images to be ready
+        try {
+          const f = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+          if (f?.ready) await f.ready;
+        } catch { /* ignore */ }
+        const innerImgs = Array.from(doc.images);
+        await Promise.all(innerImgs.map((img) => new Promise<void>((r) => {
+          if (img.complete && img.naturalWidth > 0) return r();
+          img.onload = () => r();
+          img.onerror = () => r();
+          setTimeout(() => r(), 4000);
+        })));
+        // Give layout a tick to settle
+        await new Promise((r) => setTimeout(r, 80));
+        win.focus();
+        win.print();
+        cleanup();
+        resolve();
+      } catch (e) {
+        cleanup();
+        reject(e);
+      }
+    };
+    // srcdoc is more reliable for cross-origin font links
+    iframe.srcdoc = docHtml;
+  });
 }
 
 const emptySlot = (): Slot => ({ text: "", link: "" });
@@ -436,8 +497,6 @@ function clearSavedDefault() {
   try { localStorage.removeItem(PDF_DEFAULT_KEY); } catch { /* ignore */ }
 }
 
-const safeFileName = (n: string) => (n || "exam").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
-
 export default function Exporter({ exam, open, onClose }: { exam: Exam; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
   const [cfg, setCfg] = useState<PdfConfig>(() => {
@@ -472,13 +531,11 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
     if (!questionCount) { toast({ title: "প্রশ্ন নেই", variant: "destructive" }); return; }
     setGenerating(true);
     try {
-      const blob = await buildPdf(exam, cfg, setProgress);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${safeFileName(cfg.title || exam.title)}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast({ title: "PDF তৈরি হয়েছে ✅", description: `সাইজ: ${(blob.size / 1024).toFixed(0)} KB` });
+      await printExam(exam, cfg, setProgress);
+      toast({
+        title: "প্রিন্ট ডায়ালগ খুলেছে ✅",
+        description: 'গন্তব্য থেকে "Save as PDF" বেছে নিন — ভেক্টর কোয়ালিটি, ছোট ফাইল।',
+      });
     } catch (err: unknown) {
       console.error("PDF gen error", err);
       toast({ title: "PDF তৈরিতে ত্রুটি", description: errorMessage(err), variant: "destructive" });
@@ -549,21 +606,11 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 </div>
               </section>
 
-              <section>
-                <h3 className="text-xs font-bold mb-2">কোয়ালিটি</h3>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <NumberInput label="রেন্ডার scale (1.5–3)" value={cfg.renderScale} min={1.2} max={3} step={0.1} onChange={(v) => updateCfg("renderScale", v)} />
-                  <NumberInput label="JPEG কোয়ালিটি (.5–.95)" value={cfg.jpegQuality} min={0.5} max={0.95} step={0.01} onChange={(v) => updateCfg("jpegQuality", v)} />
-                </div>
-                <div className="mt-2">
-                  <label className="text-xs text-muted-foreground">আউটপুট ফরম্যাট</label>
-                  <select value={cfg.outputFormat} onChange={(e) => updateCfg("outputFormat", e.target.value as "png" | "jpeg")}
-                    className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                    <option value="png">PNG — সর্বোচ্চ শার্প (zoom-এ ফাটে না)</option>
-                    <option value="jpeg">JPEG — হালকা ফাইল</option>
-                  </select>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">PNG + scale ৩ = জুমেও তীক্ষ্ণ। ছোট ফাইল চাইলে JPEG বাছুন।</p>
+              <section className="rounded-lg border border-border bg-muted/40 p-3">
+                <h3 className="text-xs font-bold mb-1">📄 ভেক্টর PDF (নতুন)</h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  এখন ব্রাউজারের native প্রিন্ট ব্যবহার করে PDF তৈরি হয় — অনেক <b>ছোট ফাইল</b>, যেকোনো জুমে <b>ক্রিস্টাল ক্লিয়ার</b> টেক্সট ও ম্যাথ। বাটন চাপলে প্রিন্ট ডায়ালগ আসবে — গন্তব্য থেকে <b>"Save as PDF"</b> বেছে নিন।
+                </p>
               </section>
 
               <section>
@@ -623,7 +670,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 </div>
                 <button onClick={downloadPdf} disabled={busy} className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   {generating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                  {generating ? progress || "তৈরি হচ্ছে..." : "এক ক্লিকে PDF ডাউনলোড"}
+                  {generating ? progress || "তৈরি হচ্ছে..." : 'PDF সেভ করুন (Save as PDF)'}
                 </button>
               </div>
             </div>
