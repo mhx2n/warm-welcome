@@ -62,6 +62,15 @@ export interface SiteSettings {
   activeThemeId: string;
   customTheme?: { light: ThemeColors; dark: ThemeColors };
   uiLabels?: Record<string, string>;
+  reportSettings?: ReportSettings;
+}
+
+export interface ReportSettings {
+  themeId: string; // "blue" | "emerald" | "maroon" | "noir-gold" | "purple" | "custom"
+  customHeader?: string; // hex
+  customAccent?: string; // hex
+  footerText: string;
+  footerLinks: { label: string; url: string }[];
 }
 
 export interface Exam {
