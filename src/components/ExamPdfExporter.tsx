@@ -70,6 +70,10 @@ interface PdfConfig {
   renderScale: number;
   outputFormat: "png" | "jpeg";
   presetVersion: number;
+  headerFirstPageOnly: boolean;
+  showWatermark: boolean;
+  watermarkOpacity: number;
+  watermarkSize: number;
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
@@ -181,6 +185,10 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-footer .slot.center{text-align:center;flex:1.2}
     .pdf-footer .slot.right{text-align:right}
     .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
+    .pdf-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);opacity:${cfg.watermarkOpacity};width:${cfg.watermarkSize}%;max-width:70%;pointer-events:none;z-index:0;object-fit:contain}
+    .pdf-header,.pdf-body,.pdf-footer,.pdf-mini-head{position:relative;z-index:1}
+    .pdf-mini-head{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid ${cfg.primaryColor};padding:0 2px 4px;margin-bottom:6px;font-size:${cfg.baseFontSize - 0.5}px;color:${cfg.primaryColor};font-weight:600}
+    .pdf-mini-head .t{font-weight:800}
     /* KaTeX tweaks for inline pdf */
     .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
     .math-display{display:block;white-space:normal;margin:.18em 0}
@@ -204,6 +212,15 @@ function buildPageHeaderHTML(exam: Exam, cfg: PdfConfig): string {
           <span>সেট: ${escapeHtml(cfg.setLabel || "—")}</span>
           <span>সময়: ${toBn(exam.duration)} মিনিট</span>
         </div>` : ""}
+    </div>
+  `;
+}
+
+function buildMiniHeaderHTML(exam: Exam, cfg: PdfConfig): string {
+  return `
+    <div class="pdf-mini-head">
+      <span class="t">${escapeHtml(cfg.title || exam.title)}</span>
+      <span>সেট: ${escapeHtml(cfg.setLabel || "—")}</span>
     </div>
   `;
 }
@@ -248,7 +265,15 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   const newPage = (): PageEls => {
     const page = document.createElement("div");
     page.className = "pdf-page";
-    page.innerHTML = buildPageHeaderHTML(exam, cfg);
+    const isFirst = pages.length === 0;
+    if (cfg.showWatermark && cfg.logoDataUrl) {
+      page.innerHTML = `<img class="pdf-watermark" src="${cfg.logoDataUrl}" alt=""/>`;
+    }
+    if (isFirst || !cfg.headerFirstPageOnly) {
+      page.insertAdjacentHTML("beforeend", buildPageHeaderHTML(exam, cfg));
+    } else {
+      page.insertAdjacentHTML("beforeend", buildMiniHeaderHTML(exam, cfg));
+    }
     const body = document.createElement("div");
     body.className = "pdf-body";
     const left = document.createElement("div");
@@ -292,12 +317,15 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
           pages.push(cur);
           curCol = cur.left;
           curCol.appendChild(node);
+          // if still doesn't fit on a fresh page (oversized), allow overflow
+          if (!fits(curCol)) curCol.style.overflow = "visible";
         }
       } else {
         cur = newPage();
         pages.push(cur);
         curCol = cur.left;
         curCol.appendChild(node);
+        if (!fits(curCol)) curCol.style.overflow = "visible";
       }
     }
   }
@@ -381,6 +409,10 @@ const DEFAULT_CFG: PdfConfig = {
   renderScale: 2,
   outputFormat: "jpeg",
   presetVersion: PDF_CFG_VERSION,
+  headerFirstPageOnly: true,
+  showWatermark: true,
+  watermarkOpacity: 0.07,
+  watermarkSize: 55,
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
 
@@ -542,7 +574,15 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                   <Toggle label="ব্যাখ্যা" checked={cfg.showExplanations} onChange={(v) => updateCfg("showExplanations", v)} />
                   <Toggle label="প্রশ্নের ছবি" checked={cfg.showQuestionImages} onChange={(v) => updateCfg("showQuestionImages", v)} />
                   <Toggle label="অপশনের ছবি" checked={cfg.showOptionImages} onChange={(v) => updateCfg("showOptionImages", v)} />
+                  <Toggle label="হেডার শুধু ১ম পৃষ্ঠায়" checked={cfg.headerFirstPageOnly} onChange={(v) => updateCfg("headerFirstPageOnly", v)} />
+                  <Toggle label="লোগো ওয়াটারমার্ক" checked={cfg.showWatermark} onChange={(v) => updateCfg("showWatermark", v)} />
                 </div>
+                {cfg.showWatermark && (
+                  <div className="grid sm:grid-cols-2 gap-3 mt-3">
+                    <NumberInput label="ওয়াটারমার্ক opacity" value={cfg.watermarkOpacity} min={0.02} max={0.25} step={0.01} onChange={(v) => updateCfg("watermarkOpacity", v)} />
+                    <NumberInput label="ওয়াটারমার্ক সাইজ %" value={cfg.watermarkSize} min={20} max={80} step={1} onChange={(v) => updateCfg("watermarkSize", v)} />
+                  </div>
+                )}
               </section>
 
               <section>
