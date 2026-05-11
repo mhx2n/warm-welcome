@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { useSiteSettings, useSaveSiteSettings } from "@/hooks/useSupabaseData";
 import { SiteSettings, ThemeColors } from "@/lib/types";
 import { themePresets, applyThemeColors } from "@/lib/themePresets";
+import { reportThemePresets, defaultReportSettings } from "@/lib/reportThemePresets";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Palette, Check, Sliders } from "lucide-react";
+import { Save, Palette, Check, Sliders, FileText, Plus, Trash2, Link2 } from "lucide-react";
 import { getTheme } from "@/lib/theme";
 
 const colorFields: { key: keyof ThemeColors; label: string }[] = [
@@ -103,6 +104,18 @@ const AdminThemeSettings = () => {
     if (settings.activeThemeId === "custom" && settings.customTheme) return settings.customTheme[currentMode];
     return activePreset ? activePreset[currentMode] : themePresets[0][currentMode];
   };
+
+  const reportSettings = settings.reportSettings || defaultReportSettings;
+  const updateReport = (patch: Partial<typeof reportSettings>) => {
+    setSettings((p) => p ? { ...p, reportSettings: { ...reportSettings, ...patch } } : p);
+  };
+  const updateFooterLink = (idx: number, field: "label" | "url", value: string) => {
+    const links = [...reportSettings.footerLinks];
+    links[idx] = { ...links[idx], [field]: value };
+    updateReport({ footerLinks: links });
+  };
+  const addFooterLink = () => updateReport({ footerLinks: [...reportSettings.footerLinks, { label: "", url: "" }] });
+  const removeFooterLink = (idx: number) => updateReport({ footerLinks: reportSettings.footerLinks.filter((_, i) => i !== idx) });
 
   return (
     <div className="animate-fade-in max-w-2xl mx-auto">
