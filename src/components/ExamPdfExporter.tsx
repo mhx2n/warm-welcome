@@ -451,8 +451,23 @@ const DEFAULT_CFG: PdfConfig = {
   optionGap: 3,
   jpegQuality: 0.85,
   renderScale: 2,
+  outputFormat: "png",
   footer: { left: emptySlot(), center: { text: "✈ আমাদের টেলিগ্রাম চ্যানেল", link: "" }, right: emptySlot() },
 };
+
+const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
+function loadSavedDefault(): Partial<PdfConfig> | null {
+  try {
+    const raw = localStorage.getItem(PDF_DEFAULT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveDefault(cfg: PdfConfig) {
+  try { localStorage.setItem(PDF_DEFAULT_KEY, JSON.stringify(cfg)); } catch { /* ignore */ }
+}
+function clearSavedDefault() {
+  try { localStorage.removeItem(PDF_DEFAULT_KEY); } catch { /* ignore */ }
+}
 
 const safeFileName = (n: string) => (n || "exam").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
 
