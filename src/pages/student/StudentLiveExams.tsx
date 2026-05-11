@@ -128,6 +128,12 @@ const StudentLiveExams = () => {
   const liveNow = accessibleExams.filter((exam) => exam.status === "live");
   const upcoming = accessibleExams.filter((exam) => exam.status === "scheduled");
 
+  // Show finished boards for: ended exams the user can access, OR live exams already submitted by user.
+  const finishedBoards = [
+    ...finishedExams.filter((e) => !accessLoading && canAccess(e.exam_id)),
+    ...exams.filter((e) => mySubmittedIds.has(e.id) && !finishedExams.find((f) => f.id === e.id)),
+  ];
+
   const joinExam = async (exam: LiveExam) => {
     if (!user) return;
     if (exam.status !== "live") {
