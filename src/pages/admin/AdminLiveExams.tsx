@@ -173,8 +173,6 @@ const AdminLiveExams = () => {
             <td style="text-align:center;"><span style="display:inline-block;min-width:26px;padding:3px 8px;border-radius:999px;font-weight:700;font-size:12px;${rankBadge}">${rank}</span></td>
             <td>${avatarCell}</td>
             <td style="font-weight:600;color:#0F172A;">${esc(pr?.full_name || "Unknown")}</td>
-            <td>${esc(pr?.phone || "—")}</td>
-            <td>${esc(pr?.batch_name || "—")}</td>
             <td style="text-align:center;font-weight:700;color:${theme.header};">${esc(p.score)}/${esc(p.max_score)}</td>
             <td style="text-align:center;color:#16A34A;font-weight:600;">${esc(p.correct)}</td>
             <td style="text-align:center;color:#DC2626;font-weight:600;">${esc(p.wrong)}</td>
@@ -227,12 +225,12 @@ const AdminLiveExams = () => {
             <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:12px;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;">
               <thead>
                 <tr style="background:${theme.header};color:#fff;">
-                  ${["#","Photo","Name","Phone","Batch","Score","Correct","Wrong","Skipped","%","Time","Status"]
+                  ${["#","Photo","Name","Score","Correct","Wrong","Skipped","%","Time","Status"]
                     .map((h, idx) => `<th style="padding:10px 8px;text-align:${idx===2?'left':'center'};font-weight:600;font-size:11.5px;letter-spacing:.03em;">${h}</th>`).join("")}
                 </tr>
               </thead>
               <tbody>
-                ${rows || `<tr><td colspan="12" style="text-align:center;padding:30px;color:#94A3B8;">No participants yet</td></tr>`}
+                ${rows || `<tr><td colspan="10" style="text-align:center;padding:30px;color:#94A3B8;">No participants yet</td></tr>`}
               </tbody>
             </table>
             <div style="margin-top:22px;padding-top:14px;border-top:2px solid ${theme.header};display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#475569;">
