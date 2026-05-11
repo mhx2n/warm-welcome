@@ -325,3 +325,124 @@ function ExamCardLive({
 }
 
 export default StudentLiveExams;
+
+function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string | null; size?: number }) {
+  if (url) return <img src={url} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+  return (
+    <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.42 }}>
+      {(name || "U")[0].toUpperCase()}
+    </div>
+  );
+}
+
+function LeaderboardModal({
+  exam, parts, profiles, loading, currentUserId, onClose,
+}: {
+  exam: LiveExam;
+  parts: FinishedParticipant[];
+  profiles: Record<string, ProfileLite>;
+  loading: boolean;
+  currentUserId?: string;
+  onClose: () => void;
+}) {
+  const top3 = parts.slice(0, 3);
+  const rest = parts.slice(3);
+  // Visual order for podium: 2nd, 1st, 3rd
+  const podiumOrder = [top3[1], top3[0], top3[2]];
+  const podiumMeta = [
+    { label: "2nd", color: "from-slate-300 to-slate-500", h: "h-20", ring: "ring-slate-400" },
+    { label: "1st", color: "from-amber-300 to-amber-500", h: "h-28", ring: "ring-amber-400" },
+    { label: "3rd", color: "from-orange-300 to-orange-500", h: "h-16", ring: "ring-orange-400" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in"
+      onClick={onClose}>
+      <div className="bg-background w-full md:max-w-2xl max-h-[92vh] rounded-t-3xl md:rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border-b border-border flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-primary font-bold uppercase tracking-wide">Leaderboard</p>
+            <h3 className="text-base font-bold truncate">{exam.title}</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{parts.length} জন অংশগ্রহণ করেছে</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0"><X size={18} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-12 text-center text-sm text-muted-foreground">লোড হচ্ছে...</div>
+          ) : parts.length === 0 ? (
+            <div className="p-12 text-center">
+              <Trophy className="mx-auto text-muted-foreground/40 mb-3" size={36} />
+              <p className="text-sm text-muted-foreground">এখনো কেউ পরীক্ষা জমা দেয়নি</p>
+            </div>
+          ) : (
+            <>
+              {/* Podium */}
+              {top3.length > 0 && (
+                <div className="px-4 pt-6 pb-3 bg-gradient-to-b from-warning/5 to-transparent">
+                  <div className="flex items-end justify-center gap-2 md:gap-4">
+                    {podiumOrder.map((p, i) => {
+                      if (!p) return <div key={i} className="flex-1" />;
+                      const meta = podiumMeta[i];
+                      const pr = profiles[p.user_id];
+                      const isMe = p.user_id === currentUserId;
+                      const avSize = i === 1 ? 72 : 56;
+                      return (
+                        <div key={p.id} className="flex-1 flex flex-col items-center text-center">
+                          <div className="relative mb-2">
+                            <div className={`rounded-full ring-4 ${meta.ring} ring-offset-2 ring-offset-background`}>
+                              <Avatar url={pr?.avatar_url} name={pr?.full_name} size={avSize} />
+                            </div>
+                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-br ${meta.color} shadow`}>
+                              {p.score}/{p.max_score}
+                            </div>
+                          </div>
+                          <p className={`text-xs font-bold leading-tight truncate w-full ${isMe ? "text-primary" : ""}`}>
+                            {pr?.full_name || "Unknown"}
+                          </p>
+                          {pr?.batch_name && <p className="text-[10px] text-muted-foreground truncate w-full">{pr.batch_name}</p>}
+                          <div className={`mt-2 w-full ${meta.h} rounded-t-xl bg-gradient-to-b ${meta.color} flex items-center justify-center shadow-inner`}>
+                            <span className="text-2xl md:text-3xl font-extrabold text-white drop-shadow">{meta.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Rest list */}
+              <div className="p-4 space-y-1.5">
+                {rest.map((p, i) => {
+                  const pr = profiles[p.user_id];
+                  const isMe = p.user_id === currentUserId;
+                  return (
+                    <div key={p.id}
+                      className={`flex items-center gap-3 p-2.5 rounded-xl ${isMe ? "bg-primary/15 border border-primary/30" : "bg-muted/30"}`}>
+                      <div className="w-7 text-center font-bold text-sm text-muted-foreground">{i + 4}</div>
+                      <Avatar url={pr?.avatar_url} name={pr?.full_name} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate">
+                          {pr?.full_name || "—"} {isMe && <span className="text-primary text-[10px]">(আপনি)</span>}
+                        </p>
+                        {pr?.batch_name && <p className="text-[10px] text-muted-foreground truncate">{pr.batch_name}</p>}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold">{p.score}/{p.max_score}</p>
+                        <p className="text-[10px] text-muted-foreground">{Math.round(p.percentage)}%</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
