@@ -445,37 +445,34 @@ ${pagesHtml}
 </body>
 </html>`;
 
-  // In debug mode, open in a NEW WINDOW so the user can visually inspect
-  // overlaps before deciding to print. Otherwise use a hidden iframe.
+  // CRITICAL: We MUST open in a top-level window (window.open), not a hidden
+  // iframe. When this app runs inside Lovable's preview iframe, calling
+  // print() on a nested iframe triggers the OUTER page's print dialog
+  // (browsers print the topmost ancestor). A new window is its own top-level
+  // browsing context, so window.print() inside it prints exactly our content.
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) {
+    throw new Error(
+      "পপ-আপ ব্লক করা হয়েছে। ব্রাউজারের popup blocker বন্ধ করে আবার চেষ্টা করুন।",
+    );
+  }
+  w.document.open();
+  w.document.write(docHtml);
+  w.document.close();
+
   if (cfg.debugMode) {
-    const w = window.open("", "_blank", "noopener,noreferrer,width=900,height=1000");
-    if (!w) throw new Error("Popup ব্লক করা হয়েছে — ব্রাউজার সেটিংস চেক করুন");
-    w.document.open();
-    w.document.write(docHtml);
-    w.document.close();
+    // Debug: leave the window open for inspection. User clicks the
+    // "Print / Save as PDF" button inside the debug bar to print.
     return;
   }
 
-  const iframe = document.createElement("iframe");
-  iframe.setAttribute("aria-hidden", "true");
-  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
-  document.body.appendChild(iframe);
-
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = () => {
-      // Remove iframe shortly after print dialog closes
-      setTimeout(() => { try { iframe.remove(); } catch { /* ignore */ } }, 1500);
-    };
-    iframe.onload = async () => {
+  // Auto-print once fonts + images load
+  await new Promise<void>((resolve) => {
+    const trigger = async () => {
       try {
-        const win = iframe.contentWindow;
-        const doc = iframe.contentDocument;
-        if (!win || !doc) throw new Error("Print iframe could not be opened");
-        // Wait for iframe fonts + images to be ready
-        try {
-          const f = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
-          if (f?.ready) await f.ready;
-        } catch { /* ignore */ }
+        const doc = w.document;
+        const f = (doc as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+        if (f?.ready) await f.ready;
         const innerImgs = Array.from(doc.images);
         await Promise.all(innerImgs.map((img) => new Promise<void>((r) => {
           if (img.complete && img.naturalWidth > 0) return r();
@@ -483,19 +480,20 @@ ${pagesHtml}
           img.onerror = () => r();
           setTimeout(() => r(), 4000);
         })));
-        // Give layout a tick to settle
-        await new Promise((r) => setTimeout(r, 80));
-        win.focus();
-        win.print();
-        cleanup();
-        resolve();
+        await new Promise((r) => setTimeout(r, 120));
+        w.focus();
+        w.print();
       } catch (e) {
-        cleanup();
-        reject(e);
+        console.error("print error", e);
+      } finally {
+        resolve();
       }
     };
-    // srcdoc is more reliable for cross-origin font links
-    iframe.srcdoc = docHtml;
+    if (w.document.readyState === "complete") {
+      trigger();
+    } else {
+      w.addEventListener("load", trigger, { once: true });
+    }
   });
 }
 
