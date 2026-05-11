@@ -132,10 +132,7 @@ const AdminLiveExams = () => {
       const theme = resolveReportTheme(reportCfg);
       const headerRgb = hexToRgb(theme.header);
       const accentRgb = hexToRgb(theme.accent);
-      const podium = reportCfg.podiumColors || { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" };
-      const goldRgb = hexToRgb(podium.gold);
-      const silverRgb = hexToRgb(podium.silver);
-      const bronzeRgb = hexToRgb(podium.bronze);
+      const examDetail = selectedExamDetail || exams.find((e) => e.id === selected.exam_id);
 
       // ===== Avatar pre-fetch (top participants only — keep PDF light) =====
       const avatarMap: Record<string, string> = {};
@@ -180,42 +177,51 @@ const AdminLiveExams = () => {
 
       // ===== Header band =====
       doc.setFillColor(headerRgb[0], headerRgb[1], headerRgb[2]);
-      doc.rect(0, 0, W, 30, "F");
+      doc.rect(0, 0, W, 34, "F");
       doc.setTextColor(255, 255, 255);
       setF("bold");
-      doc.setFontSize(16);
-      doc.text(selected.title || "Live Exam Report", 12, 13);
+      doc.setFontSize(15);
+      doc.text(selected.title || "Live Exam Report", 12, 13, { maxWidth: W - 24 });
       setF("normal");
       doc.setFontSize(10);
-      doc.text("Final Result Report", 12, 20);
+      doc.text("Final Result Report", 12, 21);
       doc.setFontSize(9);
-      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 20, { align: "right" });
+      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 29, { align: "right" });
       doc.setTextColor(30, 41, 59);
 
       // ===== Exam info block =====
-      const infoLines = [
-        `Start: ${fmt(selected.start_time)}    End: ${fmt(selected.end_time)}`,
-        `Duration: ${selected.duration} min    Participants: ${parts.length}    Submitted: ${submitted.length}`,
+      const infoRows = [
+        ["Exam", examDetail?.title || selected.title || "—"],
+        ["Live title", selected.title || "—"],
+        ["Time", `${fmt(selected.start_time)}  →  ${fmt(selected.end_time)}`],
+        ["Duration", `${selected.duration || examDetail?.duration || 0} min`],
+        ["Questions", `${examDetail?.question_count ?? "—"}`],
+        ["Negative mark", `${"negative_marking" in (examDetail || {}) ? Number((examDetail as any).negative_marking) : "—"}`],
+        ["Participants", `${parts.length}`],
+        ["Submitted", `${submitted.length}`],
       ];
-      setF("normal");
-      doc.setFontSize(9.5);
-      doc.setTextColor(71, 85, 105);
-      let y = 38;
-      infoLines.forEach((ln) => { doc.text(ln, 12, y); y += 4.8; });
-      y += 3;
-      // suppress unused-var warnings (podium colors retained for future use)
-      void goldRgb; void silverRgb; void bronzeRgb;
+      autoTable(doc, {
+        startY: 42,
+        body: infoRows,
+        theme: "plain",
+        styles: { font: FONT, fontSize: 9, cellPadding: { top: 1.6, right: 2, bottom: 1.6, left: 2 }, textColor: [51, 65, 85], overflow: "linebreak" },
+        columnStyles: { 0: { cellWidth: 34, fontStyle: "bold", textColor: [15, 23, 42] }, 1: { cellWidth: W - 58 } },
+        margin: { left: 12, right: 12 },
+      });
+      let y = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 6 : 74;
 
       // ===== Full leaderboard table (clean, professional, all details) =====
       autoTable(doc, {
         startY: y,
-        head: [["#", "", "Name", "Score", "Correct", "Wrong", "Skipped", "Percent", "Time", "Status"]],
+        head: [["#", "Photo", "Name", "Phone", "Batch", "Score", "Correct", "Wrong", "Skipped", "%", "Time", "Status"]],
         body: sorted.map((p, i) => {
           const pr = profiles[p.user_id];
           return [
             String(i + 1),
             "", // avatar cell
             pr?.full_name || "Unknown",
+            pr?.phone || "—",
+            pr?.batch_name || "—",
             `${p.score}/${p.max_score}`,
             String(p.correct),
             String(p.wrong),
@@ -225,14 +231,22 @@ const AdminLiveExams = () => {
             p.status || (p.submitted_at ? "submitted" : "started"),
           ];
         }),
-        styles: { font: FONT, fontStyle: "normal", fontSize: 9, cellPadding: 2.4, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 9 },
+        styles: { font: FONT, fontStyle: "normal", fontSize: 7.6, cellPadding: 1.7, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 8.5 },
         headStyles: { font: FONT, fontStyle: "bold", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
         bodyStyles: { font: FONT, fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
         columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 10 },
-          2: { halign: "left", cellWidth: 44 },
-          9: { cellWidth: 20 },
+          0: { cellWidth: 8 },
+          1: { cellWidth: 12 },
+          2: { halign: "left", cellWidth: 30 },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 18 },
+          6: { cellWidth: 13 },
+          7: { cellWidth: 13 },
+          8: { cellWidth: 14 },
+          9: { cellWidth: 13 },
+          10: { cellWidth: 14 },
+          11: { cellWidth: 18 },
         },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 10, right: 10, bottom: 22 },
