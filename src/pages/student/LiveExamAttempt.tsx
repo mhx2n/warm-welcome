@@ -21,6 +21,7 @@ const LiveExamAttempt = () => {
   const { canAccess, loading: accessLoading } = usePremiumAccess();
 
   const [liveExam, setLiveExam] = useState<LiveExam | null>(null);
+  const [negativeMarking, setNegativeMarking] = useState<number>(0);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -49,6 +50,11 @@ const LiveExamAttempt = () => {
         return;
       }
       setLiveExam(le as LiveExam);
+
+      // Fetch exam config for negative marking
+      const { data: examRow } = await supabase.from("exams")
+        .select("negative_marking").eq("id", le.exam_id).maybeSingle();
+      setNegativeMarking(Number(examRow?.negative_marking || 0));
 
       const { data: q } = await supabase.from("questions").select("id,question,options,answer,section")
         .eq("exam_id", le.exam_id).order("sort_order");
@@ -176,14 +182,16 @@ const LiveExamAttempt = () => {
       else if (a === q.answer) correct++;
       else wrong++;
     });
-    const score = correct;
     const max = questions.length;
+    const negMarks = +(wrong * negativeMarking).toFixed(2);
+    const score = +Math.max(0, correct - negMarks).toFixed(2);
     const pct = max ? (score / max) * 100 : 0;
     const elapsed = startedAtRef.current ? Math.floor((Date.now() - startedAtRef.current.getTime()) / 1000) : 0;
 
     await supabase.from("live_exam_participants").update({
       status: "submitted", submitted_at: new Date().toISOString(),
       score, max_score: max, correct, wrong, skipped,
+      negative_marks: negMarks,
       percentage: pct, time_taken_seconds: elapsed,
     }).eq("id", participant.id);
 
