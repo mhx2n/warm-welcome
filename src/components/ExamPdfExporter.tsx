@@ -145,13 +145,10 @@ function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
 
 function pageStyles(cfg: PdfConfig): string {
   const footerBottom = Math.max(8, cfg.pageMargin / 2);
-  // Effective inner box used for measurement & content layout.
-  const innerW = A4_W - SAFE_H;
-  const innerH = A4_H - SAFE_V;
   return `
     .pdf-page{
       width:${A4_W}px;height:${A4_H}px;
-      padding:${cfg.pageMargin + SAFE_V/2}px ${cfg.pageMargin + SAFE_H/2}px ${footerBottom + SAFE_V/2}px ${cfg.pageMargin + SAFE_H/2}px;
+      padding:${cfg.pageMargin}px ${cfg.pageMargin}px ${footerBottom}px ${cfg.pageMargin}px;
       box-sizing:border-box;
       background:#ffffff;color:#0f172a;
       font-family:'Noto Sans Bengali','Inter','Hind Siliguri',sans-serif;
@@ -161,7 +158,6 @@ function pageStyles(cfg: PdfConfig): string {
       font-feature-settings:"liga","calt","kern","clig";
       text-rendering:optimizeLegibility;
       -webkit-font-smoothing:antialiased;
-      overflow:hidden;
     }
     .pdf-header{margin-bottom:6px}
     .pdf-logo{display:block;margin:0 auto 4px;height:${cfg.logoHeight}px;object-fit:contain}
@@ -170,7 +166,6 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-meta{display:flex;justify-content:space-between;align-items:center;border-top:1.1px solid ${cfg.primaryColor};border-bottom:1.1px solid ${cfg.primaryColor};padding:5px 4px;margin-top:8px;font-size:${cfg.baseFontSize}px;color:${cfg.primaryColor};font-weight:600}
     .pdf-body{flex:1 1 auto;display:flex;gap:${cfg.columnGap}px;margin-top:8px;min-height:0;overflow:hidden}
     .pdf-col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-    .pdf-col > .q:last-child{margin-bottom:0}
     .pdf-divider{width:0.7px;background:${cfg.borderColor};align-self:stretch}
     .q{margin-bottom:${cfg.questionGap}px;page-break-inside:avoid;break-inside:avoid}
     .q-row{display:grid;grid-template-columns:auto 1fr;column-gap:6px;align-items:start}
@@ -189,7 +184,7 @@ function pageStyles(cfg: PdfConfig): string {
     .ans-line span{font-weight:600;color:#0f172a}
     .exp-line{margin-top:3px;color:#334155;font-weight:400}
     .exp-line b{color:${cfg.primaryColor};font-weight:700}
-    .pdf-footer{flex:0 0 auto;margin-top:6px;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
+    .pdf-footer{flex:0 0 auto;margin-top:6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;border-top:0.6px solid ${cfg.borderColor};padding-top:4px;font-size:${Math.max(7.5, cfg.baseFontSize - 0.8)}px;color:#475569}
     .pdf-footer .slot{min-width:0;color:${cfg.primaryColor};font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .pdf-footer .slot.left{text-align:left;justify-self:start}
     .pdf-footer .slot.center{text-align:center;justify-self:center}
