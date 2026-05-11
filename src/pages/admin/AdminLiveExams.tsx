@@ -106,6 +106,7 @@ const AdminLiveExams = () => {
     (async () => {
       const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
       const W = doc.internal.pageSize.getWidth();
+      const H = doc.internal.pageSize.getHeight();
       const sorted = [...parts].sort((a, b) => b.score - a.score || a.time_taken_seconds - b.time_taken_seconds);
       const submitted = parts.filter((p) => p.status === "submitted" || p.submitted_at);
       const fmt = (d: string) => new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -115,37 +116,142 @@ const AdminLiveExams = () => {
         return `${mm}:${String(ss).padStart(2, "0")}`;
       };
 
-      // Header band
-      doc.setFillColor(37, 99, 235);
-      doc.rect(0, 0, W, 26, "F");
+      // ===== Theme + footer config =====
+      const reportCfg = siteSettings?.reportSettings || defaultReportSettings;
+      const theme = resolveReportTheme(reportCfg);
+      const headerRgb = hexToRgb(theme.header);
+      const accentRgb = hexToRgb(theme.accent);
+
+      // ===== Avatar pre-fetch (top participants only — keep PDF light) =====
+      const avatarMap: Record<string, string> = {};
+      const avatarUsers = sorted.slice(0, 60); // limit
+      await Promise.all(avatarUsers.map(async (p) => {
+        const url = profiles[p.user_id]?.avatar_url;
+        if (!url) return;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const blob = await res.blob();
+          const dataUrl: string = await new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+          avatarMap[p.user_id] = dataUrl;
+        } catch { /* ignore */ }
+      }));
+
+      const drawAvatar = (uid: string, name: string, x: number, y: number, size: number) => {
+        const dataUrl = avatarMap[uid];
+        if (dataUrl) {
+          try {
+            const fmt = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+            // jsPDF clipping: round mask via circle then addImage
+            doc.saveGraphicsState?.();
+            doc.addImage(dataUrl, fmt, x, y, size, size, undefined, "FAST");
+            doc.restoreGraphicsState?.();
+            return;
+          } catch { /* fall through */ }
+        }
+        // Initial-circle fallback
+        doc.setFillColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+        doc.circle(x + size / 2, y + size / 2, size / 2, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(size * 1.6);
+        doc.text((name || "U")[0].toUpperCase(), x + size / 2, y + size / 2 + size * 0.18, { align: "center" });
+      };
+
+      // ===== Header band =====
+      doc.setFillColor(headerRgb[0], headerRgb[1], headerRgb[2]);
+      doc.rect(0, 0, W, 28, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text(selected.title, 12, 11);
+      doc.setFontSize(17);
+      doc.text(selected.title, 12, 12);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.text("Final Result Report", 12, 18);
+      doc.text("Final Result Report", 12, 19);
+      doc.setFontSize(9);
+      doc.text(`Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, W - 12, 19, { align: "right" });
       doc.setTextColor(30, 41, 59);
 
-      // Exam info block
+      // ===== Exam info block =====
       const infoLines = [
-        `Exam: ${selected.title}`,
         `Start: ${fmt(selected.start_time)}    End: ${fmt(selected.end_time)}`,
         `Duration: ${selected.duration} min    Participants: ${parts.length}    Submitted: ${submitted.length}`,
       ];
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(51, 65, 85);
-      let y = 33;
-      infoLines.forEach((ln) => { doc.text(ln, 12, y); y += 5.2; });
+      doc.setFontSize(9.5);
+      doc.setTextColor(71, 85, 105);
+      let y = 35;
+      infoLines.forEach((ln) => { doc.text(ln, 12, y); y += 4.8; });
+      y += 3;
 
+      // ===== Podium block (top 3) =====
+      const top3 = sorted.slice(0, 3);
+      if (top3.length > 0) {
+        const podiumY = y;
+        const podiumH = 56;
+        // Background card
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(10, podiumY, W - 20, podiumH, 3, 3, "F");
+        // Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
+        doc.text("TOP PERFORMERS", W / 2, podiumY + 6.5, { align: "center" });
+
+        const slots: { rank: number; idx: number; medal: string; medalRgb: [number, number, number]; tileH: number }[] = [
+          { rank: 2, idx: 1, medal: "2nd", medalRgb: [148, 163, 184], tileH: 22 },
+          { rank: 1, idx: 0, medal: "1st", medalRgb: [234, 179, 8], tileH: 30 },
+          { rank: 3, idx: 2, medal: "3rd", medalRgb: [202, 138, 4], tileH: 18 },
+        ];
+        const slotW = (W - 40) / 3;
+        slots.forEach((s, sIdx) => {
+          const p = top3[s.idx];
+          if (!p) return;
+          const cx = 20 + slotW * sIdx + slotW / 2;
+          const tileBottom = podiumY + podiumH - 4;
+          const tileTop = tileBottom - s.tileH;
+          // Tile (podium bar)
+          doc.setFillColor(s.medalRgb[0], s.medalRgb[1], s.medalRgb[2]);
+          doc.roundedRect(cx - slotW / 2 + 6, tileTop, slotW - 12, s.tileH, 2, 2, "F");
+          doc.setTextColor(255, 255, 255);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(s.medal === "1st" ? 14 : 11);
+          doc.text(s.medal, cx, tileTop + s.tileH / 2 + 2, { align: "center" });
+
+          // Avatar above tile
+          const avSize = s.medal === "1st" ? 14 : 12;
+          const avX = cx - avSize / 2;
+          const avY = tileTop - avSize - 7;
+          drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", avX, avY, avSize);
+
+          // Name + score
+          doc.setTextColor(15, 23, 42);
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8.5);
+          const name = (profiles[p.user_id]?.full_name || "Unknown").slice(0, 18);
+          doc.text(name, cx, avY + avSize + 3.5, { align: "center" });
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.5);
+          doc.setTextColor(71, 85, 105);
+          doc.text(`${p.score}/${p.max_score} • ${p.percentage.toFixed(1)}%`, cx, avY + avSize + 6.8, { align: "center" });
+        });
+        y = podiumY + podiumH + 6;
+      }
+
+      // ===== Full leaderboard table =====
       autoTable(doc, {
-        startY: y + 3,
-        head: [["Rank", "Name", "Score", "Correct", "Wrong", "Percent", "Time", "Status"]],
+        startY: y,
+        head: [["#", "", "Name", "Score", "Correct", "Wrong", "Percent", "Time", "Status"]],
         body: sorted.map((p, i) => {
           const pr = profiles[p.user_id];
           return [
             String(i + 1),
+            "", // avatar cell
             pr?.full_name || "Unknown",
             `${p.score}/${p.max_score}`,
             String(p.correct),
@@ -155,22 +261,68 @@ const AdminLiveExams = () => {
             p.status || (p.submitted_at ? "submitted" : "started"),
           ];
         }),
-        styles: { font: "helvetica", fontStyle: "normal", fontSize: 9.5, cellPadding: 3, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak" },
-        headStyles: { font: "helvetica", fontStyle: "bold", fillColor: [37, 99, 235], textColor: 255, halign: "center", valign: "middle" },
+        styles: { font: "helvetica", fontStyle: "normal", fontSize: 9, cellPadding: 2.4, textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.2, overflow: "linebreak", minCellHeight: 9 },
+        headStyles: { font: "helvetica", fontStyle: "bold", fillColor: [headerRgb[0], headerRgb[1], headerRgb[2]], textColor: 255, halign: "center", valign: "middle" },
         bodyStyles: { font: "helvetica", fontStyle: "normal", halign: "center", valign: "middle", textColor: [30, 41, 59] },
-        columnStyles: { 1: { halign: "left", cellWidth: 58 }, 7: { cellWidth: 22 } },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 10 },
+          2: { halign: "left", cellWidth: 50 },
+          8: { cellWidth: 20 },
+        },
         alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 10, right: 10 },
+        margin: { left: 10, right: 10, bottom: 22 },
+        didDrawCell: (data) => {
+          if (data.section === "body" && data.column.index === 1) {
+            const p = sorted[data.row.index];
+            if (!p) return;
+            const size = Math.min(data.cell.height - 1.5, 7);
+            const x = data.cell.x + (data.cell.width - size) / 2;
+            const cy = data.cell.y + (data.cell.height - size) / 2;
+            drawAvatar(p.user_id, profiles[p.user_id]?.full_name || "U", x, cy, size);
+          }
+        },
       });
 
+      // ===== Footer (every page) =====
       const pages = doc.getNumberOfPages();
-      for (let p = 1; p <= pages; p++) {
-        doc.setPage(p);
-        doc.setFont("helvetica", "normal");
+      for (let pn = 1; pn <= pages; pn++) {
+        doc.setPage(pn);
+        // Footer divider
+        doc.setDrawColor(headerRgb[0], headerRgb[1], headerRgb[2]);
+        doc.setLineWidth(0.4);
+        doc.line(10, H - 14, W - 10, H - 14);
+
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
+        doc.setTextColor(headerRgb[0], headerRgb[1], headerRgb[2]);
+        doc.text(reportCfg.footerText || "", 12, H - 9);
+
+        // Links — center-spread
+        if (reportCfg.footerLinks?.length) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8.5);
+          doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+          let lx = 12;
+          const ly = H - 4;
+          reportCfg.footerLinks.forEach((lnk, idx) => {
+            const text = lnk.label || lnk.url;
+            if (!text || !lnk.url) return;
+            const w = doc.getTextWidth(text);
+            doc.textWithLink(text, lx, ly, { url: lnk.url });
+            lx += w + 8;
+            if (idx < reportCfg.footerLinks.length - 1) {
+              doc.setTextColor(148, 163, 184);
+              doc.text("•", lx - 4, ly);
+              doc.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+            }
+          });
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
         doc.setTextColor(100, 116, 139);
-        doc.text(`Page ${p} / ${pages}`, W - 12, doc.internal.pageSize.getHeight() - 6, { align: "right" });
-        doc.text("Target — Smart Exam Platform", 12, doc.internal.pageSize.getHeight() - 6);
+        doc.text(`Page ${pn} / ${pages}`, W - 12, H - 9, { align: "right" });
       }
 
       doc.save(`report-${selected.title.replace(/[\\/:*?"<>|]+/g, "_")}.pdf`);
