@@ -497,8 +497,6 @@ function clearSavedDefault() {
   try { localStorage.removeItem(PDF_DEFAULT_KEY); } catch { /* ignore */ }
 }
 
-const safeFileName = (n: string) => (n || "exam").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
-
 export default function Exporter({ exam, open, onClose }: { exam: Exam; open: boolean; onClose: () => void }) {
   const { toast } = useToast();
   const [cfg, setCfg] = useState<PdfConfig>(() => {
@@ -608,21 +606,11 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 </div>
               </section>
 
-              <section>
-                <h3 className="text-xs font-bold mb-2">কোয়ালিটি</h3>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <NumberInput label="রেন্ডার scale (1.5–3)" value={cfg.renderScale} min={1.2} max={3} step={0.1} onChange={(v) => updateCfg("renderScale", v)} />
-                  <NumberInput label="JPEG কোয়ালিটি (.5–.95)" value={cfg.jpegQuality} min={0.5} max={0.95} step={0.01} onChange={(v) => updateCfg("jpegQuality", v)} />
-                </div>
-                <div className="mt-2">
-                  <label className="text-xs text-muted-foreground">আউটপুট ফরম্যাট</label>
-                  <select value={cfg.outputFormat} onChange={(e) => updateCfg("outputFormat", e.target.value as "png" | "jpeg")}
-                    className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm">
-                    <option value="png">PNG — সর্বোচ্চ শার্প (zoom-এ ফাটে না)</option>
-                    <option value="jpeg">JPEG — হালকা ফাইল</option>
-                  </select>
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">PNG + scale ৩ = জুমেও তীক্ষ্ণ। ছোট ফাইল চাইলে JPEG বাছুন।</p>
+              <section className="rounded-lg border border-border bg-muted/40 p-3">
+                <h3 className="text-xs font-bold mb-1">📄 ভেক্টর PDF (নতুন)</h3>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  এখন ব্রাউজারের native প্রিন্ট ব্যবহার করে PDF তৈরি হয় — অনেক <b>ছোট ফাইল</b>, যেকোনো জুমে <b>ক্রিস্টাল ক্লিয়ার</b> টেক্সট ও ম্যাথ। বাটন চাপলে প্রিন্ট ডায়ালগ আসবে — গন্তব্য থেকে <b>"Save as PDF"</b> বেছে নিন।
+                </p>
               </section>
 
               <section>
@@ -682,7 +670,7 @@ export default function Exporter({ exam, open, onClose }: { exam: Exam; open: bo
                 </div>
                 <button onClick={downloadPdf} disabled={busy} className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   {generating ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
-                  {generating ? progress || "তৈরি হচ্ছে..." : "এক ক্লিকে PDF ডাউনলোড"}
+                  {generating ? progress || "তৈরি হচ্ছে..." : 'PDF সেভ করুন (Save as PDF)'}
                 </button>
               </div>
             </div>
