@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Unlock, X, Medal } from "lucide-react";
+import { Calendar, Clock, Play, Radio, Sparkles, Trophy, Lock, X, Medal, FileText, Minus } from "lucide-react";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { getLabel } from "@/lib/labels";
+import { useSiteSettings } from "@/hooks/useSupabaseData";
+import { defaultReportSettings } from "@/lib/reportThemePresets";
 
 interface LiveExam {
   id: string;
@@ -19,6 +21,8 @@ interface LiveExam {
   status: string;
   show_leaderboard?: boolean;
 }
+
+interface ExamMeta { id: string; question_count: number; negative_marking: number; }
 
 interface FinishedParticipant {
   id: string;
@@ -59,8 +63,11 @@ const StudentLiveExams = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { canAccess, loading: accessLoading } = usePremiumAccess();
+  const { data: siteSettings } = useSiteSettings();
+  const reportCfg = siteSettings?.reportSettings || defaultReportSettings;
   const [exams, setExams] = useState<LiveExam[]>([]);
   const [finishedExams, setFinishedExams] = useState<LiveExam[]>([]);
+  const [examMeta, setExamMeta] = useState<Record<string, ExamMeta>>({});
   const [mySubmittedIds, setMySubmittedIds] = useState<Set<string>>(new Set());
   const [boardExam, setBoardExam] = useState<LiveExam | null>(null);
   const [boardParts, setBoardParts] = useState<FinishedParticipant[]>([]);
@@ -84,6 +91,20 @@ const StudentLiveExams = () => {
       .order("end_time", { ascending: false })
       .limit(30);
     if (ended) setFinishedExams(ended as LiveExam[]);
+
+    // Load exam meta (question count + negative marking) for all referenced exams
+    const examIds = Array.from(new Set([...(live || []), ...(ended || [])].map((e: any) => e.exam_id).filter(Boolean)));
+    if (examIds.length) {
+      const { data: ex } = await supabase
+        .from("exams")
+        .select("id,question_count,negative_marking")
+        .in("id", examIds);
+      const map: Record<string, ExamMeta> = {};
+      (ex || []).forEach((x: any) => {
+        map[x.id] = { id: x.id, question_count: x.question_count, negative_marking: Number(x.negative_marking) };
+      });
+      setExamMeta(map);
+    }
 
     if (user) {
       const { data: mine } = await supabase
@@ -198,7 +219,7 @@ const StudentLiveExams = () => {
           </h2>
           <div className="grid gap-3 md:grid-cols-2">
             {liveNow.map((exam) => (
-              <ExamCardLive key={exam.id} exam={exam} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
+              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
             ))}
           </div>
         </div>
@@ -219,7 +240,7 @@ const StudentLiveExams = () => {
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {upcoming.map((exam) => (
-              <ExamCardLive key={exam.id} exam={exam} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
+              <ExamCardLive key={exam.id} exam={exam} meta={examMeta[exam.exam_id]} logo={reportCfg.liveExamLogo} joining={joiningExamId === exam.id} onJoin={() => joinExam(exam)} />
             ))}
           </div>
         )}
@@ -257,6 +278,8 @@ const StudentLiveExams = () => {
           profiles={boardProfiles}
           loading={boardLoading}
           currentUserId={user?.id}
+          podium={reportCfg.podiumColors || { gold: "#eab308", silver: "#94a3b8", bronze: "#ca8a04" }}
+          showFullList={reportCfg.showFullLeaderboardToStudents !== false}
           onClose={() => setBoardExam(null)}
         />
       )}
@@ -266,10 +289,14 @@ const StudentLiveExams = () => {
 
 function ExamCardLive({
   exam,
+  meta,
+  logo,
   joining,
   onJoin,
 }: {
   exam: LiveExam;
+  meta?: ExamMeta;
+  logo?: string;
   joining: boolean;
   onJoin: () => void;
 }) {
@@ -279,12 +306,13 @@ function ExamCardLive({
   return (
     <div className="glass-card-static p-4 flex flex-col gap-3 hover:scale-[1.01] transition-transform">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Radio size={14} className="text-primary" />
-            <h3 className="font-bold text-sm leading-tight truncate">{exam.title}</h3>
+        <div className="flex-1 min-w-0 flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-primary/20">
+            {logo
+              ? <img src={logo} alt="" className="w-full h-full object-cover" />
+              : <Radio size={18} className="text-primary" />}
           </div>
-          {exam.description && <p className="text-xs text-muted-foreground line-clamp-2">{exam.description}</p>}
+          <h3 className="font-bold text-sm leading-tight truncate">{exam.title}</h3>
         </div>
         <span
           className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold ${
@@ -299,8 +327,14 @@ function ExamCardLive({
         <div className="bg-muted/40 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
           <Clock size={12} className="text-primary" /> {exam.duration} মিনিট
         </div>
-        <div className="rounded-lg px-2.5 py-2 flex items-center gap-1.5 bg-primary/10 text-primary">
-          <Unlock size={12} /> অনুমোদিত
+        <div className="bg-muted/40 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
+          <FileText size={12} className="text-primary" /> {meta?.question_count ?? "—"} প্রশ্ন
+        </div>
+        <div className="bg-muted/40 rounded-lg px-2.5 py-2 flex items-center gap-1.5">
+          <Minus size={12} className="text-destructive" /> ন্যাগেটিভ: {meta ? meta.negative_marking : "—"}
+        </div>
+        <div className="rounded-lg px-2.5 py-2 flex items-center justify-center bg-primary/10 text-primary">
+          <Lock size={14} />
         </div>
       </div>
 
@@ -337,38 +371,49 @@ function Avatar({ url, name, size = 40 }: { url?: string | null; name?: string |
 }
 
 function LeaderboardModal({
-  exam, parts, profiles, loading, currentUserId, onClose,
+  exam, parts, profiles, loading, currentUserId, podium, showFullList, onClose,
 }: {
   exam: LiveExam;
   parts: FinishedParticipant[];
   profiles: Record<string, ProfileLite>;
   loading: boolean;
   currentUserId?: string;
+  podium: { gold: string; silver: string; bronze: string };
+  showFullList: boolean;
   onClose: () => void;
 }) {
   const top3 = parts.slice(0, 3);
-  const rest = parts.slice(3);
+  const rest = showFullList ? parts.slice(3) : [];
   // Visual order for podium: 2nd, 1st, 3rd
   const podiumOrder = [top3[1], top3[0], top3[2]];
   const podiumMeta = [
-    { label: "2nd", color: "from-slate-300 to-slate-500", h: "h-20", ring: "ring-slate-400" },
-    { label: "1st", color: "from-amber-300 to-amber-500", h: "h-28", ring: "ring-amber-400" },
-    { label: "3rd", color: "from-orange-300 to-orange-500", h: "h-16", ring: "ring-orange-400" },
+    { label: "2nd", color: podium.silver, h: 80 },
+    { label: "1st", color: podium.gold, h: 110 },
+    { label: "3rd", color: podium.bronze, h: 64 },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in"
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end md:items-center justify-center p-0 md:p-4 animate-fade-in"
       onClick={onClose}>
-      <div className="bg-background w-full md:max-w-2xl max-h-[92vh] rounded-t-3xl md:rounded-3xl overflow-hidden flex flex-col shadow-2xl"
+      <div className="bg-background w-full md:max-w-2xl max-h-[92vh] rounded-t-3xl md:rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-border"
         onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="px-5 py-4 bg-gradient-to-br from-primary/15 via-primary/5 to-transparent border-b border-border flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] text-primary font-bold uppercase tracking-wide">Leaderboard</p>
-            <h3 className="text-base font-bold truncate">{exam.title}</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{parts.length} জন অংশগ্রহণ করেছে</p>
+        <div className="relative px-5 py-5 border-b border-border overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${podium.gold}22, ${podium.silver}11, transparent)` }}>
+          <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full opacity-20 blur-2xl"
+            style={{ background: podium.gold }} />
+          <div className="relative flex items-start gap-3">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-lg"
+              style={{ background: `linear-gradient(135deg, ${podium.gold}, ${podium.bronze})` }}>
+              <Trophy size={22} className="text-white drop-shadow" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">Leaderboard</p>
+              <h3 className="text-base font-extrabold truncate">{exam.title}</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{parts.length} জন অংশগ্রহণকারী</p>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0"><X size={18} /></button>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0"><X size={18} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -383,30 +428,44 @@ function LeaderboardModal({
             <>
               {/* Podium */}
               {top3.length > 0 && (
-                <div className="px-4 pt-6 pb-3 bg-gradient-to-b from-warning/5 to-transparent">
-                  <div className="flex items-end justify-center gap-2 md:gap-4">
+                <div className="px-4 pt-8 pb-5">
+                  <div className="flex items-end justify-center gap-3 md:gap-5">
                     {podiumOrder.map((p, i) => {
                       if (!p) return <div key={i} className="flex-1" />;
                       const meta = podiumMeta[i];
                       const pr = profiles[p.user_id];
                       const isMe = p.user_id === currentUserId;
-                      const avSize = i === 1 ? 72 : 56;
+                      const isFirst = i === 1;
+                      const avSize = isFirst ? 80 : 60;
                       return (
                         <div key={p.id} className="flex-1 flex flex-col items-center text-center">
+                          {isFirst && (
+                            <div className="text-2xl mb-1 animate-pulse" aria-hidden>👑</div>
+                          )}
                           <div className="relative mb-2">
-                            <div className={`rounded-full ring-4 ${meta.ring} ring-offset-2 ring-offset-background`}>
-                              <Avatar url={pr?.avatar_url} name={pr?.full_name} size={avSize} />
+                            <div className="rounded-full p-1 shadow-lg"
+                              style={{ background: `linear-gradient(135deg, ${meta.color}, ${meta.color}aa)` }}>
+                              <div className="rounded-full bg-background p-0.5">
+                                <Avatar url={pr?.avatar_url} name={pr?.full_name} size={avSize} />
+                              </div>
                             </div>
-                            <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white bg-gradient-to-br ${meta.color} shadow`}>
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold text-white shadow-md whitespace-nowrap"
+                              style={{ background: meta.color }}>
                               {p.score}/{p.max_score}
                             </div>
                           </div>
-                          <p className={`text-xs font-bold leading-tight truncate w-full ${isMe ? "text-primary" : ""}`}>
+                          <p className={`text-xs font-bold leading-tight truncate w-full mt-1.5 ${isMe ? "text-primary" : ""}`}>
                             {pr?.full_name || "Unknown"}
                           </p>
                           {pr?.batch_name && <p className="text-[10px] text-muted-foreground truncate w-full">{pr.batch_name}</p>}
-                          <div className={`mt-2 w-full ${meta.h} rounded-t-xl bg-gradient-to-b ${meta.color} flex items-center justify-center shadow-inner`}>
-                            <span className="text-2xl md:text-3xl font-extrabold text-white drop-shadow">{meta.label}</span>
+                          <div className="mt-2 w-full rounded-t-xl flex items-center justify-center shadow-inner relative overflow-hidden"
+                            style={{
+                              height: meta.h,
+                              background: `linear-gradient(to bottom, ${meta.color}, ${meta.color}cc)`,
+                            }}>
+                            <div className="absolute inset-0 opacity-20"
+                              style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 50%, rgba(0,0,0,0.2) 100%)" }} />
+                            <span className="relative text-2xl md:text-3xl font-extrabold text-white drop-shadow-lg">{meta.label}</span>
                           </div>
                         </div>
                       );
@@ -415,15 +474,18 @@ function LeaderboardModal({
                 </div>
               )}
 
-              {/* Rest list */}
-              <div className="p-4 space-y-1.5">
-                {rest.map((p, i) => {
+              {/* Rest list — only when admin enabled */}
+              {showFullList ? (
+                rest.length > 0 && (
+                  <div className="px-4 pb-4 space-y-1.5 border-t border-border pt-4">
+                    <p className="text-[11px] font-semibold text-muted-foreground mb-2 px-1">বাকি র‍্যাঙ্কিং</p>
+                    {rest.map((p, i) => {
                   const pr = profiles[p.user_id];
                   const isMe = p.user_id === currentUserId;
                   return (
                     <div key={p.id}
-                      className={`flex items-center gap-3 p-2.5 rounded-xl ${isMe ? "bg-primary/15 border border-primary/30" : "bg-muted/30"}`}>
-                      <div className="w-7 text-center font-bold text-sm text-muted-foreground">{i + 4}</div>
+                      className={`flex items-center gap-3 p-2.5 rounded-xl transition ${isMe ? "bg-primary/15 border border-primary/30 ring-1 ring-primary/20" : "bg-muted/30 hover:bg-muted/50"}`}>
+                      <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center font-bold text-sm text-muted-foreground shrink-0">{i + 4}</div>
                       <Avatar url={pr?.avatar_url} name={pr?.full_name} size={36} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate">
@@ -437,8 +499,18 @@ function LeaderboardModal({
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                    })}
+                  </div>
+                )
+              ) : (
+                parts.length > 3 && (
+                  <div className="px-4 pb-4 pt-2 text-center">
+                    <p className="text-[11px] text-muted-foreground italic">
+                      পূর্ণ র‍্যাঙ্কিং এখনো প্রকাশিত হয়নি
+                    </p>
+                  </div>
+                )
+              )}
             </>
           )}
         </div>
