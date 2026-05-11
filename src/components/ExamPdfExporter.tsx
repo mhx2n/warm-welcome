@@ -189,11 +189,12 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-footer .slot.right{text-align:right}
     .pdf-footer .pn{font-weight:500;color:#475569;margin-top:1px}
     /* KaTeX tweaks for inline pdf */
-    .katex{font-size:1em !important;line-height:1.2 !important}
-    .katex-display{margin:.25em 0 !important;text-align:left}
-    .katex-display>.katex{text-align:left}
-    .math-img{display:inline-block;vertical-align:-0.25em;max-width:100%}
-    .math-img.math-d{display:block;margin:.25em 0;vertical-align:middle}
+    .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
+    .math-display{display:block;white-space:normal;margin:.18em 0}
+    .katex{font-size:1em !important;line-height:1.18 !important;white-space:nowrap}
+    .katex-display{margin:0 !important;text-align:left;overflow:visible}
+    .katex-display>.katex{text-align:left;white-space:normal}
+    .katex .mfrac{break-inside:avoid;page-break-inside:avoid}
   `;
 }
 
@@ -299,8 +300,6 @@ async function prerenderMathImages(exam: Exam, onProgress?: (msg: string) => voi
 
 async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<Blob> {
   await ensureFonts();
-  onProgress?.("ম্যাথ প্রি-রেন্ডার...");
-  const mathImages = await prerenderMathImages(exam, onProgress);
   onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
 
   // Off-screen render container
@@ -346,7 +345,7 @@ async function buildPdf(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) =
   for (let i = 0; i < exam.questions.length; i++) {
     const q = exam.questions[i];
     const tmp = document.createElement("div");
-    tmp.innerHTML = buildQuestionHTML(q, i, cfg, mathImages);
+    tmp.innerHTML = buildQuestionHTML(q, i, cfg);
     const node = tmp.firstElementChild as HTMLElement;
     curCol.appendChild(node);
     if (!fits(curCol)) {
