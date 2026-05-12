@@ -97,8 +97,7 @@ const AdminLiveExams = () => {
       access_mode: "open",
       show_leaderboard: form.show_leaderboard,
       status: "scheduled",
-      negative_marking: negVal,
-    } as any);
+    });
     if (error) return toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     toast({ title: "লাইভ পরীক্ষা তৈরি হয়েছে ✅" });
     setShowForm(false);
