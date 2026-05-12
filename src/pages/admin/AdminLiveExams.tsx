@@ -37,7 +37,6 @@ const AdminLiveExams = () => {
   const [form, setForm] = useState({
     title: "", description: "", exam_id: "", start_time: "", end_time: "",
     duration: 60, show_leaderboard: true,
-    negative_marking: "" as string, // empty => inherit from exam
   });
 
   const load = async () => {
@@ -78,15 +77,6 @@ const AdminLiveExams = () => {
     if (!form.title || !form.exam_id || !form.start_time || !form.end_time) {
       return toast({ title: "সব তথ্য পূরণ করুন", variant: "destructive" });
     }
-    const negTrim = form.negative_marking.trim();
-    let negVal: number | null = null;
-    if (negTrim !== "") {
-      const n = Number(negTrim);
-      if (!Number.isFinite(n) || n < 0) {
-        return toast({ title: "ন্যাগেটিভ মার্ক ০ বা তার বেশি সংখ্যা হতে হবে", variant: "destructive" });
-      }
-      negVal = +n.toFixed(2);
-    }
     const { error } = await supabase.from("live_exams").insert({
       title: form.title,
       description: form.description,
@@ -101,7 +91,7 @@ const AdminLiveExams = () => {
     if (error) return toast({ title: "ত্রুটি", description: error.message, variant: "destructive" });
     toast({ title: "লাইভ পরীক্ষা তৈরি হয়েছে ✅" });
     setShowForm(false);
-    setForm({ title: "", description: "", exam_id: "", start_time: "", end_time: "", duration: 60, show_leaderboard: true, negative_marking: "" });
+    setForm({ title: "", description: "", exam_id: "", start_time: "", end_time: "", duration: 60, show_leaderboard: true });
     load();
   };
 
