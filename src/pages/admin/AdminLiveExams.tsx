@@ -360,15 +360,7 @@ const AdminLiveExams = () => {
           <textarea className="w-full glass-strong rounded-lg px-3 py-2 text-sm" placeholder="বিবরণ" rows={2}
             value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <select className="w-full glass-strong rounded-lg px-3 py-2 text-sm"
-            value={form.exam_id} onChange={(e) => {
-              const id = e.target.value;
-              const ex = exams.find((x) => x.id === id) as any;
-              setForm({
-                ...form,
-                exam_id: id,
-                negative_marking: form.negative_marking || (ex?.negative_marking != null ? String(ex.negative_marking) : ""),
-              });
-            }}>
+            value={form.exam_id} onChange={(e) => setForm({ ...form, exam_id: e.target.value })}>
             <option value="">পরীক্ষা সিলেক্ট করুন</option>
             {exams.map((x) => <option key={x.id} value={x.id}>{x.title} ({x.question_count}টি) {x.published ? "✓" : "• অপ্রকাশিত"}</option>)}
           </select>
@@ -389,17 +381,6 @@ const AdminLiveExams = () => {
             <label className="text-xs text-muted-foreground">সময়কাল (মিনিট)</label>
             <input type="number" className="w-full glass-strong rounded-lg px-3 py-2 text-sm"
               value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground flex items-center justify-between">
-              <span>ন্যাগেটিভ মার্ক (প্রতি ভুল উত্তরে)</span>
-              <span className="text-[10px] text-muted-foreground/70">খালি রাখলে মূল পরীক্ষার মান ব্যবহার হবে</span>
-            </label>
-            <input type="number" min={0} step="0.01" inputMode="decimal"
-              placeholder="যেমন: 0.25"
-              className="w-full glass-strong rounded-lg px-3 py-2 text-sm"
-              value={form.negative_marking}
-              onChange={(e) => setForm({ ...form, negative_marking: e.target.value })} />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={form.show_leaderboard}
