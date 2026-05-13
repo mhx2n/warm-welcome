@@ -7,6 +7,7 @@ import { Clock, CheckCircle2, Send, Trophy, Home } from "lucide-react";
 import MathText from "@/components/MathText";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
+import { computeLiveStatus } from "@/lib/liveExamStatus";
 
 interface Question { id: string; question: string; options: string[]; answer: string; section: string; }
 interface LiveExam { id: string; title: string; exam_id: string; duration: number; status: string; show_leaderboard: boolean; end_time: string; }
@@ -39,10 +40,15 @@ const LiveExamAttempt = () => {
     (async () => {
       const { data: le } = await supabase.from("live_exams").select("*").eq("id", id).single();
       if (!le) { toast({ title: "পরীক্ষা পাওয়া যায়নি", variant: "destructive" }); navigate("/live-exams"); return; }
-      if (le.status !== "live") {
+      const effective = computeLiveStatus(le.start_time, le.end_time, le.status);
+      if (effective !== "live") {
         toast({ title: "পরীক্ষা এখন লাইভ নয়", variant: "destructive" });
         navigate("/live-exams");
         return;
+      }
+      if (le.status !== "live") {
+        void supabase.from("live_exams").update({ status: "live" }).eq("id", le.id);
+        (le as any).status = "live";
       }
       if (!accessLoading && !canAccess(le.exam_id)) {
         toast({ title: "এই পরীক্ষার অ্যাক্সেস নেই", variant: "destructive" });
