@@ -8,6 +8,7 @@ import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { getLabel } from "@/lib/labels";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
 import { defaultReportSettings } from "@/lib/reportThemePresets";
+import { computeLiveStatus, syncLiveStatuses } from "@/lib/liveExamStatus";
 
 interface LiveExam {
   id: string;
@@ -77,23 +78,33 @@ const StudentLiveExams = () => {
   useTick();
 
   const load = async () => {
-    const { data: live } = await supabase
+    // Fetch ALL recent live exams; we'll classify them by computed status
+    // so auto start/stop works even if the stored status is stale.
+    const { data: all } = await supabase
       .from("live_exams")
       .select("*")
-      .in("status", ["scheduled", "live"])
-      .order("start_time", { ascending: true });
-    if (live) setExams(live as LiveExam[]);
+      .order("start_time", { ascending: false })
+      .limit(80);
+    const rows = (all || []) as LiveExam[];
 
-    const { data: ended } = await supabase
-      .from("live_exams")
-      .select("*")
-      .eq("status", "ended")
-      .order("end_time", { ascending: false })
-      .limit(30);
-    if (ended) setFinishedExams(ended as LiveExam[]);
+    // Apply effective status on the client; fire-and-forget DB sync.
+    const decorated = rows.map((e) => ({
+      ...e,
+      status: computeLiveStatus(e.start_time, e.end_time, e.status),
+    }));
+    void syncLiveStatuses(rows);
+
+    const live = decorated
+      .filter((e) => e.status === "scheduled" || e.status === "live")
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    const ended = decorated
+      .filter((e) => e.status === "ended")
+      .slice(0, 30);
+    setExams(live);
+    setFinishedExams(ended);
 
     // Load exam meta (question count + negative marking) for all referenced exams
-    const examIds = Array.from(new Set([...(live || []), ...(ended || [])].map((e: any) => e.exam_id).filter(Boolean)));
+    const examIds = Array.from(new Set([...live, ...ended].map((e: any) => e.exam_id).filter(Boolean)));
     if (examIds.length) {
       const { data: ex } = await supabase
         .from("exams")
