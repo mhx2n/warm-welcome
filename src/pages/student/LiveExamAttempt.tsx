@@ -215,30 +215,50 @@ const LiveExamAttempt = () => {
     const myRank = sorted.findIndex((p) => p.user_id === user?.id) + 1;
     return (
       <div className="min-h-screen pt-24 pb-10 px-4 max-w-4xl mx-auto space-y-5 will-change-scroll">
-        <div className="glass-card-static p-6 text-center space-y-3">
+        <div className="glass-card-static p-6 text-center space-y-4">
           <CheckCircle2 className="mx-auto text-success" size={56} />
           <h1 className="text-2xl font-bold">পরীক্ষা জমা হয়েছে</h1>
           <p className="text-sm text-muted-foreground">{liveExam.title}</p>
-          <div className="grid grid-cols-3 gap-3 max-w-md mx-auto pt-2">
-            <div className="p-3 rounded-xl bg-primary/10">
-              <p className="text-xs text-muted-foreground">র‍্যাঙ্ক</p>
-              <p className="text-2xl font-extrabold text-primary">{myRank || "—"}</p>
+
+          {/* Primary score callout — large, single-line, never wraps */}
+          <div className="mx-auto max-w-sm rounded-2xl bg-gradient-to-br from-success/15 via-success/10 to-transparent border border-success/30 px-4 py-5">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">আপনার স্কোর</p>
+            <p className="mt-1 text-3xl sm:text-4xl font-extrabold text-success tabular-nums whitespace-nowrap">
+              {Number(participant?.score ?? 0).toFixed(2)}
+              <span className="text-muted-foreground font-bold mx-1">/</span>
+              {questions.length}
+            </p>
+            {negativeMarking > 0 && (Number(participant?.wrong) || 0) > 0 && (
+              <p className="text-[11px] text-destructive mt-1 font-semibold">
+                -{(Number(participant?.wrong || 0) * negativeMarking).toFixed(2)} ন্যাগেটিভ
+              </p>
+            )}
+          </div>
+
+          {/* Secondary stats grid */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-md mx-auto">
+            <div className="p-2.5 sm:p-3 rounded-xl bg-primary/10 min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">র‍্যাঙ্ক</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-primary tabular-nums">{myRank || "—"}</p>
             </div>
-            <div className="p-3 rounded-xl bg-success/10">
-              <p className="text-xs text-muted-foreground">স্কোর</p>
-              <p className="text-2xl font-extrabold text-success">{Number(participant?.score ?? 0).toFixed(2)}/{questions.length}</p>
-              {negativeMarking > 0 && (
-                <p className="text-[10px] text-destructive mt-0.5">-{(Number(participant?.wrong || 0) * negativeMarking).toFixed(2)} ন্যাগেটিভ</p>
-              )}
+            <div className="p-2.5 sm:p-3 rounded-xl bg-warning/10 min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">শতাংশ</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-warning tabular-nums">{Math.round(participant?.percentage || 0)}%</p>
             </div>
-            <div className="p-3 rounded-xl bg-warning/10">
-              <p className="text-xs text-muted-foreground">শতাংশ</p>
-              <p className="text-2xl font-extrabold text-warning">{Math.round(participant?.percentage || 0)}%</p>
+            <div className="p-2.5 sm:p-3 rounded-xl bg-success/10 min-w-0">
+              <p className="text-[10px] sm:text-xs text-muted-foreground">সঠিক</p>
+              <p className="text-lg sm:text-2xl font-extrabold text-success tabular-nums">{participant?.correct ?? 0}</p>
             </div>
           </div>
-          <button onClick={() => navigate("/live-exams")} className="mt-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
-            <Home size={14} /> লাইভ পরীক্ষায় ফিরে যান
-          </button>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button onClick={() => navigate(`/live-exam/${id}/review`)} className="px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-semibold inline-flex items-center gap-2">
+              📖 উত্তর পর্যালোচনা
+            </button>
+            <button onClick={() => navigate("/live-exams")} className="px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-2">
+              <Home size={14} /> লাইভ পরীক্ষায় ফিরে যান
+            </button>
+          </div>
         </div>
 
         <div className="glass-card-static p-5">
