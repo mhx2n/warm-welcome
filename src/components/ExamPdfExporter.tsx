@@ -498,13 +498,15 @@ ${pagesHtml}
 
 const emptySlot = (): Slot => ({ text: "", link: "" });
 const PDF_DEFAULT_KEY = "target_pdf_default_cfg";
-const PDF_CFG_VERSION = 2;
+const PDF_CFG_VERSION = 3;
 const DEFAULT_CFG: PdfConfig = {
   title: "",
   subtitle: "",
   logoDataUrl: "",
   logoHeight: 32,
-  showLogo: true,
+  // Header logo on the first page is intentionally hidden so the cover stays
+  // clean and professional. Watermark image still appears on every page.
+  showLogo: false,
   showMeta: true,
   showFooter: true,
   showPageNumbers: true,
