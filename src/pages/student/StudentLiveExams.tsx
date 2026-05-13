@@ -263,25 +263,36 @@ const StudentLiveExams = () => {
             <Trophy size={16} className="text-warning" /> ফলাফল ও র‍্যাঙ্কিং ({finishedBoards.length})
           </h2>
           <div className="grid gap-3 md:grid-cols-2">
-            {finishedBoards.map((exam) => (
-              <button key={exam.id} onClick={() => openBoard(exam)}
-                className="glass-card-static p-4 text-left hover:scale-[1.01] transition-transform flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0 overflow-hidden">
-                  {reportCfg.liveExamLogo ? (
-                    <img src={reportCfg.liveExamLogo} alt="logo" className="w-full h-full object-cover" />
-                  ) : (
-                    <Medal size={20} />
-                  )}
+            {finishedBoards.map((exam) => {
+              const submitted = mySubmittedIds.has(exam.id);
+              return (
+                <div key={exam.id} className="glass-card-static p-4 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-warning/15 text-warning flex items-center justify-center shrink-0 overflow-hidden">
+                    {reportCfg.liveExamLogo ? (
+                      <img src={reportCfg.liveExamLogo} alt="logo" className="w-full h-full object-cover" />
+                    ) : (
+                      <Medal size={20} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate">{exam.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {new Date(exam.end_time).toLocaleDateString("bn-BD")} • {exam.status === "ended" ? "সম্পন্ন" : "আপনি জমা দিয়েছেন"}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <button onClick={() => openBoard(exam)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                        🏆 র‍্যাঙ্কিং
+                      </button>
+                      {submitted && (
+                        <button onClick={() => navigate(`/live-exam/${exam.id}/review`)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-success/10 text-success">
+                          📖 উত্তর পর্যালোচনা
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate">{exam.title}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {new Date(exam.end_time).toLocaleDateString("bn-BD")} • {exam.status === "ended" ? "সম্পন্ন" : "আপনি জমা দিয়েছেন"}
-                  </p>
-                </div>
-                <span className="text-xs text-primary font-semibold shrink-0">র‍্যাঙ্কিং →</span>
-              </button>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
