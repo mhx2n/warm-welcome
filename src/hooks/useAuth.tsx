@@ -176,11 +176,29 @@ export async function signUp(email: string, password: string, fullName?: string)
 }
 
 export async function signInWithGoogle() {
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: window.location.origin,
+  // Use Supabase's native OAuth flow so it works on every host
+  // (Vercel, custom domains, etc.) — the lovable cloud auth helper
+  // requires the /~oauth/* endpoints which are only served on
+  // Lovable preview/hosting and 404 elsewhere.
+  const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/` : undefined;
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      queryParams: { prompt: "select_account" },
+    },
   });
-  if (result.error) throw new Error(result.error.message || "Google সাইন-ইন ব্যর্থ");
-  return result;
+  if (error) {
+    // Fallback to lovable cloud auth (only works on lovable.app preview)
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+      if (result.error) throw new Error(result.error.message || error.message || "Google সাইন-ইন ব্যর্থ");
+      return result;
+    } catch {
+      throw new Error(error.message || "Google সাইন-ইন ব্যর্থ");
+    }
+  }
+  return data;
 }
 
 export async function signOut() {
