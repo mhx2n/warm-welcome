@@ -546,7 +546,9 @@ function loadSavedDefault(): Partial<PdfConfig> | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PdfConfig>;
     if (parsed.presetVersion === PDF_CFG_VERSION) return parsed;
-    return { ...parsed, renderScale: 2, jpegQuality: 0.82, outputFormat: "jpeg", presetVersion: PDF_CFG_VERSION };
+    // Migrate older saved configs: force the new "no header logo on first
+    // page" default so cover stays clean for every existing user.
+    return { ...parsed, renderScale: 2, jpegQuality: 0.82, outputFormat: "jpeg", showLogo: false, presetVersion: PDF_CFG_VERSION };
   } catch { return null; }
 }
 function saveDefault(cfg: PdfConfig) {
