@@ -7,6 +7,7 @@ import html2canvas from "html2canvas";
 import notoBengaliUrl from "@/assets/NotoSansBengali-Regular.ttf";
 import { useSiteSettings } from "@/hooks/useSupabaseData";
 import { resolveReportTheme, hexToRgb, defaultReportSettings } from "@/lib/reportThemePresets";
+import { syncLiveStatuses } from "@/lib/liveExamStatus";
 
 interface ExamRow { id: string; title: string; question_count: number; duration: number; published: boolean; }
 interface ExamDetailRow { id: string; title: string; question_count: number; duration: number; negative_marking: number; }
@@ -46,7 +47,16 @@ const AdminLiveExams = () => {
       supabase.from("live_exams").select("*").order("start_time", { ascending: false }),
     ]);
     if (e.data) setExams(e.data as ExamRow[]);
-    if (l.data) setLiveExams(l.data as unknown as LiveExam[]);
+    if (l.data) {
+      // Auto-apply scheduled→live and live→ended based on schedule
+      const updates = await syncLiveStatuses(l.data as any[]);
+      let rows = l.data as unknown as LiveExam[];
+      if (updates.length) {
+        const map = new Map(updates.map((u) => [u.id, u.status]));
+        rows = rows.map((r) => (map.has(r.id) ? { ...r, status: map.get(r.id)! } : r));
+      }
+      setLiveExams(rows);
+    }
     setLoading(false);
   };
 
