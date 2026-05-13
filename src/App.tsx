@@ -47,6 +47,7 @@ import AdminLiveExams from "./pages/admin/AdminLiveExams";
 import AdminPremiumBatches from "./pages/admin/AdminPremiumBatches";
 import StudentLiveExams from "./pages/student/StudentLiveExams";
 import LiveExamAttempt from "./pages/student/LiveExamAttempt";
+import LiveExamReview from "./pages/student/LiveExamReview";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,6 +93,7 @@ const App = () => (
                   <Route path="/about" element={<AboutContact />} />
                   <Route path="/live-exams" element={<StudentLiveExams />} />
                   <Route path="/live-exam/:id" element={<LiveExamAttempt />} />
+                  <Route path="/live-exam/:id/review" element={<LiveExamReview />} />
                 </Route>
 
                 {/* Admin routes */}
