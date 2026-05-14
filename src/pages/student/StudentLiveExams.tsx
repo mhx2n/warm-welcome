@@ -283,7 +283,7 @@ const StudentLiveExams = () => {
                       <button onClick={() => openBoard(exam)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">
                         🏆 র‍্যাঙ্কিং
                       </button>
-                      {submitted && (
+                      {submitted && exam.status === "ended" && (
                         <button onClick={() => navigate(`/live-exam/${exam.id}/review`)} className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-success/10 text-success">
                           📖 উত্তর পর্যালোচনা
                         </button>

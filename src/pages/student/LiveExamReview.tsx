@@ -39,7 +39,7 @@ const LiveExamReview = () => {
       if (!le) { toast({ title: "পরীক্ষা পাওয়া যায়নি", variant: "destructive" }); navigate("/live-exams"); return; }
       const effective = computeLiveStatus(le.start_time, le.end_time, le.status);
 
-      // Fetch participant first — student can review only after they've submitted
+      // Fetch participant — student must have submitted
       const { data: p } = await supabase.from("live_exam_participants")
         .select("id,score,max_score,correct,wrong,skipped,percentage,status")
         .eq("live_exam_id", id).eq("user_id", user.id).maybeSingle();
@@ -49,9 +49,9 @@ const LiveExamReview = () => {
         navigate("/live-exams");
         return;
       }
-      // Allow review when exam window has ended OR student already submitted
-      if (effective !== "ended" && p.status !== "submitted") {
-        toast({ title: "পরীক্ষা শেষ হলে দেখা যাবে", variant: "destructive" });
+      // Strict: review available ONLY after the live exam has ended (anti-cheating)
+      if (effective !== "ended") {
+        toast({ title: "পরীক্ষা শেষ হওয়ার পর উত্তর পর্যালোচনা দেখা যাবে", variant: "destructive" });
         navigate("/live-exams");
         return;
       }
