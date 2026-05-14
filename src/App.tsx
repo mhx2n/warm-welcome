@@ -45,6 +45,7 @@ import AdminEventBanners from "./pages/admin/AdminEventBanners";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminLiveExams from "./pages/admin/AdminLiveExams";
 import AdminPremiumBatches from "./pages/admin/AdminPremiumBatches";
+import AdminPhotocardBuilder from "./pages/admin/AdminPhotocardBuilder";
 import StudentLiveExams from "./pages/student/StudentLiveExams";
 import LiveExamAttempt from "./pages/student/LiveExamAttempt";
 import LiveExamReview from "./pages/student/LiveExamReview";
@@ -114,6 +115,7 @@ const App = () => (
                     <Route path="/admin/users" element={<AdminUsers />} />
                     <Route path="/admin/live-exams" element={<AdminLiveExams />} />
                     <Route path="/admin/premium-batches" element={<AdminPremiumBatches />} />
+                    <Route path="/admin/photocard-builder" element={<AdminPhotocardBuilder />} />
                   </Route>
                 </Route>
               </Route>
