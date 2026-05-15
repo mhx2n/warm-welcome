@@ -129,14 +129,6 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* GPU-accelerated transitions for interactive elements */
-  button, a, [role="button"] {
-    will-change: transform;
-    transform: translateZ(0);
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-
   img {
     content-visibility: auto;
   }
@@ -144,26 +136,24 @@
 
 @layer utilities {
   .glass {
-    @apply bg-[hsl(var(--glass-bg))] backdrop-blur-xl border border-[hsl(var(--glass-border))] shadow-lg;
+    @apply bg-[hsl(var(--glass-bg))] md:backdrop-blur-md border border-[hsl(var(--glass-border))] shadow-lg;
   }
 
   .glass-strong {
-    @apply bg-card/80 backdrop-blur-2xl border border-[hsl(var(--glass-border))] shadow-xl;
+    @apply bg-card md:bg-card/85 md:backdrop-blur-md border border-[hsl(var(--glass-border))] shadow-xl;
   }
 
   .glass-nav {
-    @apply bg-card/70 backdrop-blur-2xl border-b border-[hsl(var(--glass-border))] shadow-sm;
+    @apply bg-card/95 md:bg-card/80 md:backdrop-blur-md border-b border-[hsl(var(--glass-border))] shadow-sm;
   }
 
   .glass-card {
-    @apply bg-[hsl(var(--glass-bg))] backdrop-blur-xl border border-[hsl(var(--glass-border))] shadow-lg rounded-2xl hover:shadow-xl hover:-translate-y-0.5;
+    @apply bg-card md:bg-[hsl(var(--glass-bg))] md:backdrop-blur-md border border-[hsl(var(--glass-border))] shadow-lg rounded-2xl hover:shadow-xl hover:-translate-y-0.5;
     transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.15s cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: transform;
-    transform: translateZ(0);
   }
 
   .glass-card-static {
-    @apply bg-[hsl(var(--glass-bg))] backdrop-blur-xl border border-[hsl(var(--glass-border))] shadow-lg rounded-2xl;
+    @apply bg-card md:bg-[hsl(var(--glass-bg))] md:backdrop-blur-md border border-[hsl(var(--glass-border))] shadow-lg rounded-2xl;
   }
 
   .gradient-text {

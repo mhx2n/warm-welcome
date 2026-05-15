@@ -3,8 +3,9 @@ import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import {
   Image as ImageIcon, Type, Trash2, Copy, ArrowUp, ArrowDown,
-  Download, Save, Plus, FolderOpen, X, RotateCw, Lock, Unlock,
+  Download, Save, FolderOpen, X, RotateCw, Lock, Unlock, Sparkles,
 } from "lucide-react";
+import { BUILTIN_TEMPLATES } from "@/lib/photocardTemplates";
 
 type LayerBase = {
   id: string;
@@ -78,6 +79,9 @@ const PRESETS = [
   { name: "Landscape 16:9", w: 1920, h: 1080 },
   { name: "FB Cover", w: 1640, h: 856 },
   { name: "A4 Print", w: 2480, h: 3508 },
+  { name: "Telegram Post 16:9", w: 1280, h: 720 },
+  { name: "Telegram Square", w: 1080, h: 1080 },
+  { name: "Telegram Story 9:16", w: 1080, h: 1920 },
 ];
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -135,6 +139,7 @@ const AdminPhotocardBuilder = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>(() => loadTemplates());
   const [showTemplates, setShowTemplates] = useState(false);
+  const [tplTab, setTplTab] = useState<"builtin" | "saved">("builtin");
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [stageW, setStageW] = useState(600);
@@ -314,7 +319,8 @@ const AdminPhotocardBuilder = () => {
           <p className="text-xs text-muted-foreground mt-1">কাস্টম লেআউট তৈরি করুন, টেমপ্লেট সেভ করুন, হাই-রেজ PNG ডাউনলোড করুন</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowTemplates(true)} className="px-3 py-2 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/70 flex items-center gap-1.5"><FolderOpen size={14} /> টেমপ্লেট</button>
+          <button onClick={() => { setTplTab("builtin"); setShowTemplates(true); }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 flex items-center gap-1.5"><Sparkles size={14} /> থিম গ্যালারি</button>
+          <button onClick={() => { setTplTab("saved"); setShowTemplates(true); }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/70 flex items-center gap-1.5"><FolderOpen size={14} /> সেভ করা</button>
           <button onClick={saveAsTemplate} className="px-3 py-2 text-xs font-semibold rounded-lg bg-secondary hover:bg-secondary/80 flex items-center gap-1.5"><Save size={14} /> সেভ</button>
           <button onClick={exportPNG} className="px-3 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5"><Download size={14} /> ডাউনলোড PNG</button>
         </div>
@@ -555,32 +561,64 @@ const AdminPhotocardBuilder = () => {
 
       {showTemplates && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowTemplates(false)}>
-          <div className="bg-background rounded-2xl p-4 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-background rounded-2xl p-4 max-w-3xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold">সেভ করা টেমপ্লেট</h3>
+              <h3 className="font-bold">টেমপ্লেট গ্যালারি</h3>
               <button onClick={() => setShowTemplates(false)} className="p-1.5 hover:bg-muted rounded"><X size={16} /></button>
             </div>
-            {templates.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">কোনো টেমপ্লেট নেই। উপরের "সেভ" বাটন দিয়ে তৈরি করুন।</p>}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {templates.map((t) => (
-                <div key={t.id} className="border border-border rounded-xl p-2">
-                  <div
-                    className="aspect-square rounded-lg mb-2 overflow-hidden cursor-pointer"
-                    onClick={() => loadTemplate(t)}
-                    style={
-                      t.doc.background.type === "gradient"
-                        ? { background: `linear-gradient(${t.doc.background.gradientAngle}deg, ${t.doc.background.gradientFrom}, ${t.doc.background.gradientTo})` }
-                        : { background: t.doc.background.color }
-                    }
-                  />
-                  <p className="text-xs font-semibold truncate">{t.name}</p>
-                  <div className="flex gap-1 mt-1">
-                    <button onClick={() => loadTemplate(t)} className="flex-1 text-[10px] py-1 rounded bg-primary text-primary-foreground">লোড</button>
-                    <button onClick={() => deleteTemplate(t.id)} className="text-[10px] px-2 py-1 rounded bg-destructive/15 text-destructive">✕</button>
-                  </div>
-                </div>
-              ))}
+            <div className="flex gap-1 mb-4 p-1 bg-muted rounded-lg w-fit">
+              <button onClick={() => setTplTab("builtin")} className={`px-3 py-1.5 text-xs font-semibold rounded-md ${tplTab === "builtin" ? "bg-background shadow" : ""}`}>✨ বিল্ট-ইন থিম ({BUILTIN_TEMPLATES.length})</button>
+              <button onClick={() => setTplTab("saved")} className={`px-3 py-1.5 text-xs font-semibold rounded-md ${tplTab === "saved" ? "bg-background shadow" : ""}`}>📁 সেভ করা ({templates.length})</button>
             </div>
+
+            {tplTab === "builtin" && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {BUILTIN_TEMPLATES.map((t) => (
+                  <div key={t.id} className="border border-border rounded-xl p-2 hover:border-primary transition-colors">
+                    <div
+                      className="aspect-square rounded-lg mb-2 overflow-hidden cursor-pointer relative flex items-center justify-center text-center p-3"
+                      onClick={() => { loadTemplate({ id: t.id, name: t.name, doc: JSON.parse(JSON.stringify(t.doc)), createdAt: 0 } as any); }}
+                      style={
+                        t.doc.background.type === "gradient"
+                          ? { background: `linear-gradient(${t.doc.background.gradientAngle}deg, ${t.doc.background.gradientFrom}, ${t.doc.background.gradientTo})` }
+                          : { background: t.doc.background.color }
+                      }
+                    >
+                      <span className="text-white text-xs font-bold drop-shadow-lg" style={{ color: t.doc.background.type === "color" && t.doc.background.color === "#ffffff" ? "#0f172a" : "#fff" }}>{t.name}</span>
+                    </div>
+                    <p className="text-xs font-semibold truncate">{t.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{t.doc.width}×{t.doc.height}</p>
+                    <button onClick={() => loadTemplate({ id: t.id, name: t.name, doc: JSON.parse(JSON.stringify(t.doc)), createdAt: 0 } as any)} className="w-full mt-1 text-[10px] py-1 rounded bg-primary text-primary-foreground">ব্যবহার করুন</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {tplTab === "saved" && (
+              <>
+                {templates.length === 0 && <p className="text-xs text-muted-foreground text-center py-8">কোনো সেভ করা টেমপ্লেট নেই। উপরের "সেভ" বাটন দিয়ে তৈরি করুন।</p>}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {templates.map((t) => (
+                    <div key={t.id} className="border border-border rounded-xl p-2">
+                      <div
+                        className="aspect-square rounded-lg mb-2 overflow-hidden cursor-pointer"
+                        onClick={() => loadTemplate(t)}
+                        style={
+                          t.doc.background.type === "gradient"
+                            ? { background: `linear-gradient(${t.doc.background.gradientAngle}deg, ${t.doc.background.gradientFrom}, ${t.doc.background.gradientTo})` }
+                            : { background: t.doc.background.color }
+                        }
+                      />
+                      <p className="text-xs font-semibold truncate">{t.name}</p>
+                      <div className="flex gap-1 mt-1">
+                        <button onClick={() => loadTemplate(t)} className="flex-1 text-[10px] py-1 rounded bg-primary text-primary-foreground">লোড</button>
+                        <button onClick={() => deleteTemplate(t.id)} className="text-[10px] px-2 py-1 rounded bg-destructive/15 text-destructive">✕</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
