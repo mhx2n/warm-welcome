@@ -3,8 +3,9 @@ import html2canvas from "html2canvas";
 import { useToast } from "@/hooks/use-toast";
 import {
   Image as ImageIcon, Type, Trash2, Copy, ArrowUp, ArrowDown,
-  Download, Save, Plus, FolderOpen, X, RotateCw, Lock, Unlock,
+  Download, Save, FolderOpen, X, RotateCw, Lock, Unlock, Sparkles,
 } from "lucide-react";
+import { BUILTIN_TEMPLATES } from "@/lib/photocardTemplates";
 
 type LayerBase = {
   id: string;
@@ -78,6 +79,9 @@ const PRESETS = [
   { name: "Landscape 16:9", w: 1920, h: 1080 },
   { name: "FB Cover", w: 1640, h: 856 },
   { name: "A4 Print", w: 2480, h: 3508 },
+  { name: "Telegram Post 16:9", w: 1280, h: 720 },
+  { name: "Telegram Square", w: 1080, h: 1080 },
+  { name: "Telegram Story 9:16", w: 1080, h: 1920 },
 ];
 
 const uid = () => Math.random().toString(36).slice(2, 10);
