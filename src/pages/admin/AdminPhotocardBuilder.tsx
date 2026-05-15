@@ -139,6 +139,7 @@ const AdminPhotocardBuilder = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [templates, setTemplates] = useState<Template[]>(() => loadTemplates());
   const [showTemplates, setShowTemplates] = useState(false);
+  const [tplTab, setTplTab] = useState<"builtin" | "saved">("builtin");
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [stageW, setStageW] = useState(600);
@@ -318,7 +319,8 @@ const AdminPhotocardBuilder = () => {
           <p className="text-xs text-muted-foreground mt-1">কাস্টম লেআউট তৈরি করুন, টেমপ্লেট সেভ করুন, হাই-রেজ PNG ডাউনলোড করুন</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowTemplates(true)} className="px-3 py-2 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/70 flex items-center gap-1.5"><FolderOpen size={14} /> টেমপ্লেট</button>
+          <button onClick={() => { setTplTab("builtin"); setShowTemplates(true); }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-accent text-accent-foreground hover:bg-accent/80 flex items-center gap-1.5"><Sparkles size={14} /> থিম গ্যালারি</button>
+          <button onClick={() => { setTplTab("saved"); setShowTemplates(true); }} className="px-3 py-2 text-xs font-semibold rounded-lg bg-muted hover:bg-muted/70 flex items-center gap-1.5"><FolderOpen size={14} /> সেভ করা</button>
           <button onClick={saveAsTemplate} className="px-3 py-2 text-xs font-semibold rounded-lg bg-secondary hover:bg-secondary/80 flex items-center gap-1.5"><Save size={14} /> সেভ</button>
           <button onClick={exportPNG} className="px-3 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5"><Download size={14} /> ডাউনলোড PNG</button>
         </div>
