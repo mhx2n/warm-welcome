@@ -1,8 +1,11 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { store } from "@/lib/store";
 import { Clock, HelpCircle, ArrowLeft } from "lucide-react";
+import { getLabel } from "@/lib/labels";
 
-const diffLabel: Record<string, string> = { easy: "সহজ", medium: "মাঝারি", hard: "কঠিন" };
+const diffFallback: Record<string, string> = { easy: "সহজ", medium: "মাঝারি", hard: "কঠিন" };
+const diffLabelOf = (d: string) =>
+  getLabel(`diff${d.charAt(0).toUpperCase() + d.slice(1)}`, diffFallback[d] || d);
 
 const StudentExamDetails = () => {
   const { id } = useParams();
@@ -27,7 +30,7 @@ const StudentExamDetails = () => {
       <div className="glass-card-static p-6 space-y-5">
         <div className="flex flex-wrap gap-2">
           <span className="text-xs font-medium bg-primary/10 text-primary px-3 py-1 rounded-full">{exam.subject}</span>
-          <span className="text-xs font-medium bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning px-3 py-1 rounded-full">{diffLabel[exam.difficulty]}</span>
+          <span className="text-xs font-medium bg-warning/15 text-warning dark:bg-warning/20 dark:text-warning px-3 py-1 rounded-full">{diffLabelOf(exam.difficulty)}</span>
         </div>
 
         <h1 className="text-2xl font-bold">{exam.title}</h1>
