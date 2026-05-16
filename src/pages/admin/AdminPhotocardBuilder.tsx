@@ -720,6 +720,13 @@ const TextProps = ({ layer, update }: { layer: TextLayer; update: (p: Partial<Te
       </label>
       <button onClick={() => update({ bg: "transparent" })} className="text-[10px] px-2 py-1 rounded bg-muted self-end">×</button>
     </div>
+    <div className="grid grid-cols-10 gap-0.5">
+      {COLOR_SWATCHES.slice(0, 30).map((c) => (
+        <button key={c} title={c} onClick={() => update({ color: c })}
+          className="aspect-square rounded ring-1 ring-border hover:ring-2 hover:ring-primary"
+          style={{ background: c }} />
+      ))}
+    </div>
     <div className="flex gap-1">
       {(["left", "center", "right"] as const).map((a) => (
         <button key={a} onClick={() => update({ align: a })} className={`flex-1 text-[10px] py-1 rounded ${layer.align === a ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{a}</button>
@@ -758,6 +765,11 @@ const ImageProps = ({ layer, update }: { layer: ImageLayer; update: (p: Partial<
         <option value="sepia">sepia</option>
       </select>
     </label>
+    <div className="flex items-center gap-2 pt-1">
+      <button onClick={() => update({ glow: !layer.glow })}
+        className={`flex-1 text-[10px] py-1.5 rounded ${layer.glow ? "bg-primary text-primary-foreground" : "bg-muted"}`}>✨ গ্লো</button>
+      <input type="color" value={layer.glowColor || "#22d3ee"} onChange={(e) => update({ glowColor: e.target.value })} className="h-8 w-12 rounded cursor-pointer" />
+    </div>
   </div>
 );
 
