@@ -286,7 +286,9 @@ const AdminPhotocardBuilder = () => {
 
   const exportPNG = async () => {
     if (!frameRef.current) return;
-    toast({ title: "ছবি তৈরি হচ্ছে…" });
+    toast({ title: "ছবি তৈরি হচ্ছে… (হাই-রেজ)" });
+    // Wait for all web fonts to load so text wrapping matches the preview exactly.
+    try { await (document as any).fonts?.ready; } catch {}
     // Temporarily remove transform scale so html2canvas captures at full resolution
     const node = frameRef.current;
     const prevTransform = node.style.transform;
@@ -295,18 +297,20 @@ const AdminPhotocardBuilder = () => {
       const canvas = await html2canvas(node, {
         backgroundColor: null,
         useCORS: true,
-        scale: 1, // node is already at full canvas size
+        scale: 2, // 2x super-sampling for crisp print-quality output
         width: doc.width,
         height: doc.height,
         windowWidth: doc.width,
         windowHeight: doc.height,
+        logging: false,
+        imageTimeout: 15000,
       });
       const url = canvas.toDataURL("image/png");
       const a = document.createElement("a");
       a.href = url;
       a.download = `photocard-${Date.now()}.png`;
       a.click();
-      toast({ title: "ডাউনলোড সম্পন্ন ✅" });
+      toast({ title: `ডাউনলোড সম্পন্ন ✅ (${canvas.width}×${canvas.height})` });
     } catch (err) {
       console.error(err);
       toast({ title: "ডাউনলোড ব্যর্থ", variant: "destructive" });
