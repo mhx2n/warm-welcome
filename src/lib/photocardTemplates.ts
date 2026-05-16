@@ -52,6 +52,7 @@ function img(o: any) {
     fit: "cover" as const,
     radius: 24,
     filter: "none" as const,
+    glow: false,
     ...o,
   };
 }
