@@ -37,6 +37,8 @@ type ImageLayer = LayerBase & {
   fit: "cover" | "contain";
   radius: number;
   filter: "none" | "grayscale" | "blur" | "sepia";
+  glow?: boolean;
+  glowColor?: string;
 };
 type Layer = TextLayer | ImageLayer;
 
@@ -70,6 +72,35 @@ const FONTS = [
   "'Bebas Neue', sans-serif",
   "'Space Grotesk', sans-serif",
   "'Anek Bangla', sans-serif",
+];
+
+// Curated cute / professional solid color samples
+const COLOR_SWATCHES = [
+  "#0f172a", "#1e293b", "#1e3a8a", "#1d4ed8", "#2563eb", "#3b82f6", "#0ea5e9", "#06b6d4",
+  "#0d9488", "#059669", "#16a34a", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#f97316",
+  "#ef4444", "#dc2626", "#e11d48", "#db2777", "#c026d3", "#9333ea", "#7c3aed", "#6366f1",
+  "#ffffff", "#f5f5f4", "#fafafa", "#e2e8f0", "#94a3b8", "#475569", "#374151", "#111827",
+  "#fce7f3", "#fef3c7", "#dcfce7", "#dbeafe", "#ede9fe", "#fee2e2", "#ffedd5", "#cffafe",
+];
+
+// Curated professional gradient samples
+const GRADIENT_PRESETS: { name: string; from: string; to: string; angle: number }[] = [
+  { name: "Ocean Deep", from: "#0ea5e9", to: "#0369a1", angle: 135 },
+  { name: "Sunset", from: "#f97316", to: "#db2777", angle: 135 },
+  { name: "Aurora", from: "#a78bfa", to: "#22d3ee", angle: 135 },
+  { name: "Midnight", from: "#1e1b4b", to: "#0f172a", angle: 180 },
+  { name: "Emerald", from: "#10b981", to: "#064e3b", angle: 135 },
+  { name: "Royal", from: "#1d4ed8", to: "#1e1b4b", angle: 135 },
+  { name: "Peach Cream", from: "#fed7aa", to: "#fce7f3", angle: 135 },
+  { name: "Mint Sky", from: "#bbf7d0", to: "#bae6fd", angle: 135 },
+  { name: "Lavender", from: "#ede9fe", to: "#fce7f3", angle: 135 },
+  { name: "Bold Red", from: "#7f1d1d", to: "#dc2626", angle: 180 },
+  { name: "Gold Lux", from: "#facc15", to: "#a16207", angle: 135 },
+  { name: "Cyber", from: "#22d3ee", to: "#7c3aed", angle: 135 },
+  { name: "Forest", from: "#166534", to: "#052e16", angle: 135 },
+  { name: "Rose Gold", from: "#fda4af", to: "#be185d", angle: 135 },
+  { name: "Slate Pro", from: "#475569", to: "#0f172a", angle: 135 },
+  { name: "Sky Pop", from: "#7dd3fc", to: "#1d4ed8", angle: 135 },
 ];
 
 const PRESETS = [
@@ -117,6 +148,7 @@ const newImageLayer = (src: string, w: number, h: number): ImageLayer => ({
   x: w * 0.2, y: h * 0.2, w: w * 0.6, h: w * 0.6,
   rotation: 0, opacity: 1,
   src, fit: "cover", radius: 24, filter: "none",
+  glow: false, glowColor: "#22d3ee",
 });
 
 function loadTemplates(): Template[] {
