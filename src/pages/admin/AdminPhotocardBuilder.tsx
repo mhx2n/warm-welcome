@@ -401,7 +401,15 @@ const AdminPhotocardBuilder = () => {
               ))}
             </div>
             {doc.background.type === "color" && (
-              <input type="color" value={doc.background.color} onChange={(e) => setDoc((d) => ({ ...d, background: { ...d.background, color: e.target.value } }))} className="w-full h-9 rounded cursor-pointer" />
+              <>
+                <input type="color" value={doc.background.color} onChange={(e) => setDoc((d) => ({ ...d, background: { ...d.background, color: e.target.value } }))} className="w-full h-9 rounded cursor-pointer" />
+                <div className="grid grid-cols-8 gap-1 pt-1">
+                  {COLOR_SWATCHES.map((c) => (
+                    <button key={c} title={c} onClick={() => setDoc((d) => ({ ...d, background: { ...d.background, color: c } }))}
+                      className="aspect-square rounded ring-1 ring-border hover:ring-2 hover:ring-primary transition" style={{ background: c }} />
+                  ))}
+                </div>
+              </>
             )}
             {doc.background.type === "gradient" && (
               <div className="space-y-2">
@@ -410,6 +418,15 @@ const AdminPhotocardBuilder = () => {
                   <input type="color" value={doc.background.gradientTo} onChange={(e) => setDoc((d) => ({ ...d, background: { ...d.background, gradientTo: e.target.value } }))} className="flex-1 h-9 rounded cursor-pointer" />
                 </div>
                 <input type="range" min={0} max={360} value={doc.background.gradientAngle} onChange={(e) => setDoc((d) => ({ ...d, background: { ...d.background, gradientAngle: +e.target.value } }))} className="w-full" />
+                <p className="text-[10px] text-muted-foreground pt-1">প্রিসেট গ্রাডিয়েন্ট</p>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {GRADIENT_PRESETS.map((g) => (
+                    <button key={g.name} title={g.name}
+                      onClick={() => setDoc((d) => ({ ...d, background: { ...d.background, gradientFrom: g.from, gradientTo: g.to, gradientAngle: g.angle } }))}
+                      className="aspect-square rounded-md ring-1 ring-border hover:ring-2 hover:ring-primary transition"
+                      style={{ background: `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})` }} />
+                  ))}
+                </div>
               </div>
             )}
             {doc.background.type === "image" && (
