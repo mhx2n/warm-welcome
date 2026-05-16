@@ -492,12 +492,17 @@ const AdminPhotocardBuilder = () => {
                           textShadow: (l as TextLayer).shadow ? "0 4px 16px rgba(0,0,0,0.45)" : "none",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
+                          // Use block + flex column to vertically center, while letting
+                          // textAlign handle horizontal alignment per-line (export-safe).
                           display: "flex",
-                          alignItems: "center",
-                          justifyContent: (l as TextLayer).align === "center" ? "center" : (l as TextLayer).align === "right" ? "flex-end" : "flex-start",
+                          flexDirection: "column",
+                          justifyContent: "center",
+                          boxSizing: "border-box",
                         }}
                       >
-                        {(l as TextLayer).text}
+                        <div style={{ width: "100%", textAlign: (l as TextLayer).align }}>
+                          {(l as TextLayer).text}
+                        </div>
                       </div>
                     ) : (
                       <img
@@ -512,6 +517,9 @@ const AdminPhotocardBuilder = () => {
                             (l as ImageLayer).filter === "grayscale" ? "grayscale(1)" :
                             (l as ImageLayer).filter === "blur" ? "blur(8px)" :
                             (l as ImageLayer).filter === "sepia" ? "sepia(1)" : "none",
+                          boxShadow: (l as ImageLayer).glow
+                            ? `0 0 60px 6px ${(l as ImageLayer).glowColor || "#22d3ee"}`
+                            : "none",
                           pointerEvents: "none",
                         }}
                       />
