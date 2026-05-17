@@ -77,7 +77,7 @@ const consumeBracketExpression = (source: string, start: number) => {
 
 const consumeSimpleLatexRun = (source: string, start: number) => {
   const tail = source.slice(start);
-  if (!/^\\[a-zA-Z]+|^[A-Za-z0-9|]+[_^=+\-*/]/.test(tail)) return null;
+  if (!/^\\[a-zA-Z]+|^[A-Za-z0-9|]+(?:\\|[_^=+\-*/])/.test(tail)) return null;
   const boundary = tail.search(/[\u0980-\u09ff]|[।,;:?।]|\n/);
   const raw = tail.slice(0, boundary === -1 ? tail.length : boundary);
   const trimmed = raw.trimEnd();
