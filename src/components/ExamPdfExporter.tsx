@@ -1,12 +1,12 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import katex from "katex";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
 import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
 import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
+import { renderMathTextToHtml } from "@/components/MathText";
 
 const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
 const BN_OPT = ["ক", "খ", "গ", "ঘ", "ঙ", "চ", "ছ", "জ"];
@@ -76,36 +76,7 @@ interface PdfConfig {
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
-// Render text with inline math (KaTeX) into an HTML string
-function renderInline(text: string): string {
-  if (!text) return "";
-  const s = String(text);
-  // escape HTML first, but preserve math regions
-  const tokens: { type: "text" | "math"; value: string; display?: boolean }[] = [];
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) {
-    if (m.index > last) tokens.push({ type: "text", value: s.slice(last, m.index) });
-    if (m[2] != null) tokens.push({ type: "math", value: m[2], display: true });
-    else if (m[4] != null) tokens.push({ type: "math", value: m[4], display: true });
-    else if (m[6] != null) tokens.push({ type: "math", value: m[6], display: false });
-    else if (m[8] != null) tokens.push({ type: "math", value: m[8], display: false });
-    last = m.index + m[0].length;
-  }
-  if (last < s.length) tokens.push({ type: "text", value: s.slice(last) });
-
-  const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
-  return tokens.map((t) => {
-    if (t.type === "text") return escape(t.value);
-    try {
-      const cls = t.display ? "math-wrap math-display" : "math-wrap math-inline";
-      return `<span class="${cls}">${katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true })}</span>`;
-    } catch {
-      return escape(`$${t.value}$`);
-    }
-  }).join("");
-}
+const renderInline = (text: string) => renderMathTextToHtml(text || "");
 
 function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const correct = resolveCorrectOptionText(q);
@@ -201,13 +172,14 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-page.debug .pdf-body{background:rgba(59,130,246,.04)}
     .pdf-page.debug::after{content:"page " counter(pg);counter-increment:pg;position:absolute;top:2px;right:6px;font-size:10px;color:#ef4444;font-weight:700;z-index:10}
     body{counter-reset:pg}
-    /* KaTeX tweaks for inline pdf */
-    .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
-    .math-display{display:block;white-space:normal;margin:.18em 0}
-    .katex{font-size:1em !important;line-height:1.18 !important;white-space:nowrap}
+    /* KaTeX tweaks for printable Bengali + math content */
+    .math-text-inline{display:inline-block;max-width:100%;vertical-align:-.08em;overflow:visible}
+    .math-text-display{display:block;max-width:100%;margin:.18em 0;overflow:visible}
+    .katex{font-size:1em !important;line-height:1.18 !important;white-space:normal;text-rendering:optimizeLegibility}
     .katex-display{margin:0 !important;text-align:left;overflow:visible}
-    .katex-display>.katex{text-align:left;white-space:normal}
-    .katex .mfrac{break-inside:avoid;page-break-inside:avoid}
+    .katex-html{white-space:normal}
+    .katex .base{max-width:100%}
+    .katex .mfrac,.katex .mord,.katex .mtable{break-inside:avoid;page-break-inside:avoid}
   `;
 }
 
@@ -259,38 +231,26 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
-/**
- * Build the print-ready HTML (one or more A4 page divs) and trigger
- * the browser's native print dialog inside a hidden iframe.
- * Output: vector PDF (Skia/PDF) when user picks "Save as PDF".
- */
-async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<void> {
+type PageEls = { page: HTMLDivElement; left: HTMLDivElement; right: HTMLDivElement | null; body: HTMLDivElement };
+
+async function buildPaginatedPages(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void) {
   await ensureFonts();
   onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
 
-  // Off-screen measuring stage (in current document, so font metrics match)
   const stage = document.createElement("div");
-  stage.style.cssText = "position:fixed;left:-99999px;top:0;z-index:-1;pointer-events:none;";
+  stage.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;z-index:-1;pointer-events:none;background:#fff;";
   const styleEl = document.createElement("style");
   styleEl.textContent = pageStyles(cfg);
   stage.appendChild(styleEl);
   document.body.appendChild(stage);
 
-  type PageEls = { page: HTMLDivElement; left: HTMLDivElement; right: HTMLDivElement | null; body: HTMLDivElement };
   const pages: PageEls[] = [];
-
   const newPage = (): PageEls => {
     const page = document.createElement("div");
     page.className = "pdf-page";
     const isFirst = pages.length === 0;
-    if (cfg.showWatermark && cfg.logoDataUrl) {
-      page.innerHTML = `<img class="pdf-watermark" src="${cfg.logoDataUrl}" alt=""/>`;
-    }
-    if (isFirst || !cfg.headerFirstPageOnly) {
-      page.insertAdjacentHTML("beforeend", buildPageHeaderHTML(exam, cfg));
-    } else {
-      page.insertAdjacentHTML("beforeend", buildMiniHeaderHTML(exam, cfg));
-    }
+    if (cfg.showWatermark && cfg.logoDataUrl) page.innerHTML = `<img class="pdf-watermark" src="${cfg.logoDataUrl}" alt=""/>`;
+    page.insertAdjacentHTML("beforeend", isFirst || !cfg.headerFirstPageOnly ? buildPageHeaderHTML(exam, cfg) : buildMiniHeaderHTML(exam, cfg));
     const body = document.createElement("div");
     body.className = "pdf-body";
     const left = document.createElement("div");
@@ -306,9 +266,6 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
       body.appendChild(right);
     }
     page.appendChild(body);
-    // Insert a placeholder footer NOW so the flex body reserves the right
-    // height during pagination measurement. We'll swap in the real footer
-    // (with correct page-numbers) after pagination completes.
     if (cfg.showFooter) {
       const placeholder = document.createElement("div");
       placeholder.innerHTML = buildFooterHTML(cfg, 1, 1);
@@ -325,18 +282,19 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
   let cur = newPage();
   pages.push(cur);
   let curCol: HTMLDivElement = cur.left;
-
   const fits = (col: HTMLDivElement) => col.scrollHeight <= col.clientHeight + 1;
 
   for (let i = 0; i < exam.questions.length; i++) {
-    const q = exam.questions[i];
+    if (i % 12 === 0) {
+      onProgress?.(`প্রশ্ন সাজানো হচ্ছে ${toBn(i + 1)} / ${toBn(exam.questions.length)}...`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
     const tmp = document.createElement("div");
-    tmp.innerHTML = buildQuestionHTML(q, i, cfg);
+    tmp.innerHTML = buildQuestionHTML(exam.questions[i], i, cfg);
     const node = tmp.firstElementChild as HTMLElement;
     curCol.appendChild(node);
     if (!fits(curCol)) {
       curCol.removeChild(node);
-      // try right col
       if (cfg.twoColumn && curCol === cur.left && cur.right) {
         curCol = cur.right;
         curCol.appendChild(node);
@@ -358,7 +316,6 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
     }
   }
 
-  // Replace placeholder footers with the real ones (correct page numbers)
   const total = pages.length;
   pages.forEach((p, idx) => {
     const old = p.page.querySelector(".pdf-footer-placeholder");
@@ -369,8 +326,7 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
     if (wrapper.firstElementChild) p.page.appendChild(wrapper.firstElementChild);
   });
 
-  // Wait for any images to load
-  onProgress?.("ছবি লোড হচ্ছে...");
+  onProgress?.("ছবি ও ফন্ট লোড হচ্ছে...");
   const imgs = stage.querySelectorAll("img");
   await Promise.all(Array.from(imgs).map((img) => new Promise<void>((res) => {
     if (img.complete && img.naturalWidth > 0) return res();
@@ -378,16 +334,19 @@ async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) 
     img.onerror = () => res();
     setTimeout(() => res(), 4000);
   })));
+  await (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+  if (cfg.debugMode) pages.forEach((p) => p.page.classList.add("debug"));
+  return { stage, pages };
+}
 
-  // Collect serialized HTML for each paginated page, then move into a hidden iframe
-  // so the browser's native print produces a vector PDF (Skia/PDF), matching the
-  // reference output. File size and sharpness benefit massively from this.
+/**
+ * Build the print-ready HTML (one or more A4 page divs) and trigger
+ * the browser's native print dialog inside a hidden iframe.
+ * Output: vector PDF (Skia/PDF) when user picks "Save as PDF".
+ */
+async function printExam(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void): Promise<void> {
+  const { stage, pages } = await buildPaginatedPages(exam, cfg, onProgress);
   onProgress?.("প্রিন্ট প্রিভিউ খুলছে...");
-
-  // In debug mode, mark every page so the CSS overlay renders
-  if (cfg.debugMode) {
-    pages.forEach((p) => p.page.classList.add("debug"));
-  }
   const pagesHtml = pages.map((p) => p.page.outerHTML).join("\n");
   stage.remove();
 
