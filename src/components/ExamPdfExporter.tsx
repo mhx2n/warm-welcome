@@ -7,6 +7,7 @@ import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Sa
 import type { Exam, Question } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { resolveCorrectOptionText } from "@/lib/answerUtils";
+import { renderMathTextToHtml } from "@/components/MathText";
 
 const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
 const BN_OPT = ["ক", "খ", "গ", "ঘ", "ঙ", "চ", "ছ", "জ"];
@@ -76,36 +77,7 @@ interface PdfConfig {
   footer: { left: Slot; center: Slot; right: Slot };
 }
 
-// Render text with inline math (KaTeX) into an HTML string
-function renderInline(text: string): string {
-  if (!text) return "";
-  const s = String(text);
-  // escape HTML first, but preserve math regions
-  const tokens: { type: "text" | "math"; value: string; display?: boolean }[] = [];
-  const re = /(\$\$([\s\S]+?)\$\$)|(\\\[([\s\S]+?)\\\])|(\\\(([\s\S]+?)\\\))|(\$([^$\n]+?)\$)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) {
-    if (m.index > last) tokens.push({ type: "text", value: s.slice(last, m.index) });
-    if (m[2] != null) tokens.push({ type: "math", value: m[2], display: true });
-    else if (m[4] != null) tokens.push({ type: "math", value: m[4], display: true });
-    else if (m[6] != null) tokens.push({ type: "math", value: m[6], display: false });
-    else if (m[8] != null) tokens.push({ type: "math", value: m[8], display: false });
-    last = m.index + m[0].length;
-  }
-  if (last < s.length) tokens.push({ type: "text", value: s.slice(last) });
-
-  const escape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
-  return tokens.map((t) => {
-    if (t.type === "text") return escape(t.value);
-    try {
-      const cls = t.display ? "math-wrap math-display" : "math-wrap math-inline";
-      return `<span class="${cls}">${katex.renderToString(t.value, { displayMode: !!t.display, throwOnError: false, output: "html", strict: false, trust: true })}</span>`;
-    } catch {
-      return escape(`$${t.value}$`);
-    }
-  }).join("");
-}
+const renderInline = (text: string) => renderMathTextToHtml(text || "");
 
 function buildQuestionHTML(q: Question, idx: number, cfg: PdfConfig): string {
   const correct = resolveCorrectOptionText(q);
