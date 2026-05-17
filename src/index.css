@@ -132,6 +132,43 @@
   img {
     content-visibility: auto;
   }
+
+  .math-text {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .math-text-inline {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: -0.08em;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .math-text-display {
+    display: block;
+    max-width: 100%;
+    margin: 0.25rem 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .math-text .katex {
+    max-width: 100%;
+    font-size: 1.04em;
+    line-height: 1.25;
+    text-rendering: optimizeLegibility;
+  }
+
+  .math-text .katex-display {
+    margin: 0;
+    text-align: left;
+  }
+
+  .math-text .katex-html {
+    white-space: normal;
+  }
 }
 
 @layer utilities {
