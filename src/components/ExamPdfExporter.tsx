@@ -231,6 +231,114 @@ function buildFooterHTML(cfg: PdfConfig, pageNum: number, totalPages: number): s
 function escapeHtml(s: string) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function escapeAttr(s: string) { return escapeHtml(s).replace(/"/g, "&quot;"); }
 
+type PageEls = { page: HTMLDivElement; left: HTMLDivElement; right: HTMLDivElement | null; body: HTMLDivElement };
+
+async function buildPaginatedPages(exam: Exam, cfg: PdfConfig, onProgress?: (msg: string) => void) {
+  await ensureFonts();
+  onProgress?.("পেজ লে-আউট তৈরি হচ্ছে...");
+
+  const stage = document.createElement("div");
+  stage.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;z-index:-1;pointer-events:none;background:#fff;";
+  const styleEl = document.createElement("style");
+  styleEl.textContent = pageStyles(cfg);
+  stage.appendChild(styleEl);
+  document.body.appendChild(stage);
+
+  const pages: PageEls[] = [];
+  const newPage = (): PageEls => {
+    const page = document.createElement("div");
+    page.className = "pdf-page";
+    const isFirst = pages.length === 0;
+    if (cfg.showWatermark && cfg.logoDataUrl) page.innerHTML = `<img class="pdf-watermark" src="${cfg.logoDataUrl}" alt=""/>`;
+    page.insertAdjacentHTML("beforeend", isFirst || !cfg.headerFirstPageOnly ? buildPageHeaderHTML(exam, cfg) : buildMiniHeaderHTML(exam, cfg));
+    const body = document.createElement("div");
+    body.className = "pdf-body";
+    const left = document.createElement("div");
+    left.className = "pdf-col";
+    body.appendChild(left);
+    let right: HTMLDivElement | null = null;
+    if (cfg.twoColumn) {
+      const div = document.createElement("div");
+      div.className = "pdf-divider";
+      body.appendChild(div);
+      right = document.createElement("div");
+      right.className = "pdf-col";
+      body.appendChild(right);
+    }
+    page.appendChild(body);
+    if (cfg.showFooter) {
+      const placeholder = document.createElement("div");
+      placeholder.innerHTML = buildFooterHTML(cfg, 1, 1);
+      const fEl = placeholder.firstElementChild;
+      if (fEl) {
+        fEl.classList.add("pdf-footer-placeholder");
+        page.appendChild(fEl);
+      }
+    }
+    stage.appendChild(page);
+    return { page, left, right, body };
+  };
+
+  let cur = newPage();
+  pages.push(cur);
+  let curCol: HTMLDivElement = cur.left;
+  const fits = (col: HTMLDivElement) => col.scrollHeight <= col.clientHeight + 1;
+
+  for (let i = 0; i < exam.questions.length; i++) {
+    if (i % 12 === 0) {
+      onProgress?.(`প্রশ্ন সাজানো হচ্ছে ${toBn(i + 1)} / ${toBn(exam.questions.length)}...`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const tmp = document.createElement("div");
+    tmp.innerHTML = buildQuestionHTML(exam.questions[i], i, cfg);
+    const node = tmp.firstElementChild as HTMLElement;
+    curCol.appendChild(node);
+    if (!fits(curCol)) {
+      curCol.removeChild(node);
+      if (cfg.twoColumn && curCol === cur.left && cur.right) {
+        curCol = cur.right;
+        curCol.appendChild(node);
+        if (!fits(curCol)) {
+          curCol.removeChild(node);
+          cur = newPage();
+          pages.push(cur);
+          curCol = cur.left;
+          curCol.appendChild(node);
+          if (!fits(curCol)) curCol.style.overflow = "visible";
+        }
+      } else {
+        cur = newPage();
+        pages.push(cur);
+        curCol = cur.left;
+        curCol.appendChild(node);
+        if (!fits(curCol)) curCol.style.overflow = "visible";
+      }
+    }
+  }
+
+  const total = pages.length;
+  pages.forEach((p, idx) => {
+    const old = p.page.querySelector(".pdf-footer-placeholder");
+    if (old) old.remove();
+    if (!cfg.showFooter) return;
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildFooterHTML(cfg, idx + 1, total);
+    if (wrapper.firstElementChild) p.page.appendChild(wrapper.firstElementChild);
+  });
+
+  onProgress?.("ছবি ও ফন্ট লোড হচ্ছে...");
+  const imgs = stage.querySelectorAll("img");
+  await Promise.all(Array.from(imgs).map((img) => new Promise<void>((res) => {
+    if (img.complete && img.naturalWidth > 0) return res();
+    img.onload = () => res();
+    img.onerror = () => res();
+    setTimeout(() => res(), 4000);
+  })));
+  await (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts?.ready;
+  if (cfg.debugMode) pages.forEach((p) => p.page.classList.add("debug"));
+  return { stage, pages };
+}
+
 /**
  * Build the print-ready HTML (one or more A4 page divs) and trigger
  * the browser's native print dialog inside a hidden iframe.
