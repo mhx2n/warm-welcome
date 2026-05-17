@@ -75,6 +75,14 @@ const consumeBracketExpression = (source: string, start: number) => {
   return null;
 };
 
+const consumeAssignmentEnvironment = (source: string, start: number) => {
+  const prefix = source.slice(start).match(/^[A-Za-z0-9|_{}^\\]+\s*=\s*(?=\\begin\{)/);
+  if (!prefix) return null;
+  const env = consumeEnvironment(source, start + prefix[0].length);
+  if (!env) return null;
+  return { value: source.slice(start, env.end), end: env.end, display: false };
+};
+
 const consumeSimpleLatexRun = (source: string, start: number) => {
   const tail = source.slice(start);
   if (!/^\\[a-zA-Z]+|^[A-Za-z0-9|]+(?:\\|[_^=+\-*/])/.test(tail)) return null;
@@ -126,6 +134,14 @@ export function renderMathTextToHtml(text: string): string {
         i = end + 1;
         continue;
       }
+    }
+
+    const assignEnv = consumeAssignmentEnvironment(source, i);
+    if (assignEnv) {
+      flush();
+      tokens.push({ type: "math", value: assignEnv.value, display: assignEnv.display });
+      i = assignEnv.end;
+      continue;
     }
 
     const env = consumeEnvironment(source, i);
