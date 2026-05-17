@@ -1,6 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import katex from "katex";
 import "katex/dist/katex.min.css";
 import "katex/dist/contrib/mhchem.mjs";
 import { Download, Image as ImageIcon, Loader2, Link as LinkIcon, RefreshCcw, Save, RotateCcw, Settings2, X } from "lucide-react";
