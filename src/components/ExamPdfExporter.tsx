@@ -172,13 +172,14 @@ function pageStyles(cfg: PdfConfig): string {
     .pdf-page.debug .pdf-body{background:rgba(59,130,246,.04)}
     .pdf-page.debug::after{content:"page " counter(pg);counter-increment:pg;position:absolute;top:2px;right:6px;font-size:10px;color:#ef4444;font-weight:700;z-index:10}
     body{counter-reset:pg}
-    /* KaTeX tweaks for inline pdf */
-    .math-wrap{break-inside:avoid;page-break-inside:avoid;white-space:nowrap}
-    .math-display{display:block;white-space:normal;margin:.18em 0}
-    .katex{font-size:1em !important;line-height:1.18 !important;white-space:nowrap}
+    /* KaTeX tweaks for printable Bengali + math content */
+    .math-text-inline{display:inline-block;max-width:100%;vertical-align:-.08em;overflow:visible}
+    .math-text-display{display:block;max-width:100%;margin:.18em 0;overflow:visible}
+    .katex{font-size:1em !important;line-height:1.18 !important;white-space:normal;text-rendering:optimizeLegibility}
     .katex-display{margin:0 !important;text-align:left;overflow:visible}
-    .katex-display>.katex{text-align:left;white-space:normal}
-    .katex .mfrac{break-inside:avoid;page-break-inside:avoid}
+    .katex-html{white-space:normal}
+    .katex .base{max-width:100%}
+    .katex .mfrac,.katex .mord,.katex .mtable{break-inside:avoid;page-break-inside:avoid}
   `;
 }
 
