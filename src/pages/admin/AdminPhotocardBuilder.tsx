@@ -645,7 +645,7 @@ const AdminPhotocardBuilder = () => {
                           {(l as TextLayer).text}
                         </div>
                       </div>
-                    ) : (
+                    ) : l.type === "image" ? (
                       <img
                         src={(l as ImageLayer).src}
                         alt=""
@@ -654,16 +654,15 @@ const AdminPhotocardBuilder = () => {
                           width: "100%", height: "100%",
                           objectFit: (l as ImageLayer).fit,
                           borderRadius: (l as ImageLayer).radius,
-                          filter:
-                            (l as ImageLayer).filter === "grayscale" ? "grayscale(1)" :
-                            (l as ImageLayer).filter === "blur" ? "blur(8px)" :
-                            (l as ImageLayer).filter === "sepia" ? "sepia(1)" : "none",
+                          filter: imageFilterCSS(l as ImageLayer),
                           boxShadow: (l as ImageLayer).glow
                             ? `0 0 60px 6px ${(l as ImageLayer).glowColor || "#22d3ee"}`
                             : "none",
                           pointerEvents: "none",
                         }}
                       />
+                    ) : (
+                      <div style={overlayStyle(l as OverlayLayer)} />
                     )}
                     {selectedId === l.id && !l.locked && (
                       <>
