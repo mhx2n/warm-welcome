@@ -911,6 +911,50 @@ const ImageProps = ({ layer, update }: { layer: ImageLayer; update: (p: Partial<
         className={`flex-1 text-[10px] py-1.5 rounded ${layer.glow ? "bg-primary text-primary-foreground" : "bg-muted"}`}>✨ গ্লো</button>
       <input type="color" value={layer.glowColor || "#22d3ee"} onChange={(e) => update({ glowColor: e.target.value })} className="h-8 w-12 rounded cursor-pointer" />
     </div>
+    <div className="pt-2 mt-1 border-t border-border/50 space-y-2">
+      <p className="text-[10px] font-bold text-muted-foreground">🎛️ অ্যাডভান্স অ্যাডজাস্টমেন্ট</p>
+      <SliderRow label="ব্রাইটনেস" value={layer.brightness ?? 100} min={0} max={200} onChange={(v) => update({ brightness: v })} />
+      <SliderRow label="কন্ট্রাস্ট" value={layer.contrast ?? 100} min={0} max={200} onChange={(v) => update({ contrast: v })} />
+      <SliderRow label="স্যাচুরেশন" value={layer.saturate ?? 100} min={0} max={200} onChange={(v) => update({ saturate: v })} />
+      <SliderRow label="হিউ" value={layer.hueRotate ?? 0} min={-180} max={180} onChange={(v) => update({ hueRotate: v })} unit="°" />
+      <SliderRow label="ব্লার" value={layer.blurPx ?? 0} min={0} max={20} onChange={(v) => update({ blurPx: v })} unit="px" />
+      <SliderRow label="ইনভার্ট" value={layer.invert ?? 0} min={0} max={100} onChange={(v) => update({ invert: v })} unit="%" />
+      <button onClick={() => update({ vintage: !layer.vintage })}
+        className={`w-full text-[10px] py-1.5 rounded ${layer.vintage ? "bg-primary text-primary-foreground" : "bg-muted"}`}>📷 ভিনটেজ {layer.vintage ? "✓" : ""}</button>
+      <button onClick={() => update({ brightness: 100, contrast: 100, saturate: 100, hueRotate: 0, blurPx: 0, invert: 0, vintage: false, filter: "none" })}
+        className="w-full text-[10px] py-1 rounded bg-muted hover:bg-muted/70">🔄 রিসেট</button>
+    </div>
+  </div>
+);
+
+const SliderRow = ({ label, value, min, max, onChange, unit = "" }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; unit?: string }) => (
+  <div>
+    <div className="flex justify-between text-[10px] text-muted-foreground">
+      <span>{label}</span><span>{Math.round(value)}{unit}</span>
+    </div>
+    <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" />
+  </div>
+);
+
+const OverlayProps = ({ layer, update }: { layer: OverlayLayer; update: (p: Partial<OverlayLayer>) => void }) => (
+  <div className="space-y-2 pt-2 border-t border-border/50">
+    <p className="text-[10px] font-bold text-muted-foreground">✨ ওভারলে: {OVERLAY_PRESETS.find((p) => p.kind === layer.kind)?.label}</p>
+    <select value={layer.kind} onChange={(e) => update({ kind: e.target.value as OverlayKind })}
+      className="w-full text-xs px-2 py-1.5 rounded bg-background border border-border">
+      {OVERLAY_PRESETS.map((p) => <option key={p.kind} value={p.kind}>{p.icon} {p.label}</option>)}
+    </select>
+    <SliderRow label="ইনটেনসিটি" value={layer.intensity} min={0} max={100} onChange={(v) => update({ intensity: v })} unit="%" />
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">কালার</span>
+      <input type="color" value={layer.color} onChange={(e) => update({ color: e.target.value })} className="w-full h-8 rounded cursor-pointer" />
+    </label>
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">ব্লেন্ড মোড</span>
+      <select value={layer.blend} onChange={(e) => update({ blend: e.target.value })}
+        className="w-full text-xs px-2 py-1.5 rounded bg-background border border-border">
+        {["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"].map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </label>
   </div>
 );
 
