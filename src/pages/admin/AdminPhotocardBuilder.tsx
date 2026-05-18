@@ -39,8 +39,35 @@ type ImageLayer = LayerBase & {
   filter: "none" | "grayscale" | "blur" | "sepia";
   glow?: boolean;
   glowColor?: string;
+  // Advanced editing
+  brightness?: number; // 0..200 (%)
+  contrast?: number;   // 0..200 (%)
+  saturate?: number;   // 0..200 (%)
+  hueRotate?: number;  // -180..180 deg
+  blurPx?: number;     // 0..20 px (separate from preset)
+  invert?: number;     // 0..100 (%)
+  vintage?: boolean;
 };
-type Layer = TextLayer | ImageLayer;
+type OverlayKind =
+  | "vignette"
+  | "grain"
+  | "scanlines"
+  | "lightleak-tl"
+  | "lightleak-br"
+  | "lensflare"
+  | "halftone"
+  | "frame-thin"
+  | "frame-thick"
+  | "duotone-blue"
+  | "duotone-pink";
+type OverlayLayer = LayerBase & {
+  type: "overlay";
+  kind: OverlayKind;
+  color: string;
+  intensity: number; // 0..100
+  blend: string; // CSS mix-blend-mode
+};
+type Layer = TextLayer | ImageLayer | OverlayLayer;
 
 type Background = {
   type: "color" | "gradient" | "image";
@@ -149,7 +176,104 @@ const newImageLayer = (src: string, w: number, h: number): ImageLayer => ({
   rotation: 0, opacity: 1,
   src, fit: "cover", radius: 24, filter: "none",
   glow: false, glowColor: "#22d3ee",
+  brightness: 100, contrast: 100, saturate: 100,
+  hueRotate: 0, blurPx: 0, invert: 0, vintage: false,
 });
+
+const newOverlayLayer = (kind: OverlayKind, w: number, h: number): OverlayLayer => ({
+  id: uid(), type: "overlay",
+  x: 0, y: 0, w, h, rotation: 0, opacity: 0.65,
+  kind, color: "#000000", intensity: 60, blend: "normal",
+});
+
+// Build CSS filter string for image layers
+const imageFilterCSS = (l: ImageLayer): string => {
+  const parts: string[] = [];
+  parts.push(`brightness(${l.brightness ?? 100}%)`);
+  parts.push(`contrast(${l.contrast ?? 100}%)`);
+  parts.push(`saturate(${l.saturate ?? 100}%)`);
+  if (l.hueRotate) parts.push(`hue-rotate(${l.hueRotate}deg)`);
+  if (l.invert) parts.push(`invert(${l.invert}%)`);
+  // Preset filter on top of base adjustments
+  if (l.filter === "grayscale") parts.push("grayscale(1)");
+  else if (l.filter === "sepia") parts.push("sepia(1)");
+  // Blur: preset blur + custom slider, additive
+  const blurTotal = (l.filter === "blur" ? 8 : 0) + (l.blurPx ?? 0);
+  if (blurTotal > 0) parts.push(`blur(${blurTotal}px)`);
+  if (l.vintage) parts.push("sepia(0.35) contrast(1.05) saturate(1.1)");
+  return parts.join(" ");
+};
+
+// Render overlay layer as a div with background based on kind
+const overlayStyle = (l: OverlayLayer): React.CSSProperties => {
+  const a = (l.intensity ?? 60) / 100;
+  const c = l.color || "#000000";
+  const base: React.CSSProperties = {
+    width: "100%", height: "100%",
+    mixBlendMode: l.blend as any,
+    pointerEvents: "none",
+  };
+  switch (l.kind) {
+    case "vignette":
+      return { ...base, background: `radial-gradient(ellipse at center, transparent 45%, ${c} 130%)`, opacity: a };
+    case "grain":
+      return {
+        ...base,
+        backgroundImage:
+          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        opacity: a * 0.85,
+        mixBlendMode: (l.blend === "normal" ? "overlay" : l.blend) as any,
+      };
+    case "scanlines":
+      return {
+        ...base,
+        backgroundImage: `repeating-linear-gradient(0deg, ${c} 0px, ${c} 1px, transparent 1px, transparent 3px)`,
+        opacity: a * 0.6,
+      };
+    case "lightleak-tl":
+      return { ...base, background: `radial-gradient(circle at 0% 0%, ${c} 0%, transparent 55%)`, opacity: a, mixBlendMode: "screen" };
+    case "lightleak-br":
+      return { ...base, background: `radial-gradient(circle at 100% 100%, ${c} 0%, transparent 55%)`, opacity: a, mixBlendMode: "screen" };
+    case "lensflare":
+      return {
+        ...base,
+        background: `radial-gradient(circle at 75% 25%, rgba(255,255,255,0.9) 0%, rgba(255,220,150,0.5) 8%, transparent 22%), radial-gradient(circle at 35% 65%, rgba(255,200,120,0.4) 0%, transparent 18%)`,
+        opacity: a,
+        mixBlendMode: "screen",
+      };
+    case "halftone":
+      return {
+        ...base,
+        backgroundImage: `radial-gradient(${c} 1px, transparent 1.5px)`,
+        backgroundSize: "6px 6px",
+        opacity: a * 0.5,
+      };
+    case "frame-thin":
+      return { ...base, boxShadow: `inset 0 0 0 ${Math.max(2, a * 8)}px ${c}`, opacity: 1 };
+    case "frame-thick":
+      return { ...base, boxShadow: `inset 0 0 0 ${Math.max(8, a * 28)}px ${c}`, opacity: 1 };
+    case "duotone-blue":
+      return { ...base, background: `linear-gradient(135deg, rgba(29,78,216,${a}), rgba(217,70,239,${a}))`, mixBlendMode: "color" };
+    case "duotone-pink":
+      return { ...base, background: `linear-gradient(135deg, rgba(244,63,94,${a}), rgba(251,146,60,${a}))`, mixBlendMode: "color" };
+    default:
+      return base;
+  }
+};
+
+const OVERLAY_PRESETS: { kind: OverlayKind; label: string; icon: string }[] = [
+  { kind: "vignette", label: "ভিনিয়েট", icon: "⚫" },
+  { kind: "grain", label: "গ্রেইন", icon: "✨" },
+  { kind: "scanlines", label: "স্ক্যানলাইন", icon: "📺" },
+  { kind: "lightleak-tl", label: "লাইট লিক ↖", icon: "💡" },
+  { kind: "lightleak-br", label: "লাইট লিক ↘", icon: "🌅" },
+  { kind: "lensflare", label: "লেন্স ফ্লেয়ার", icon: "🔆" },
+  { kind: "halftone", label: "হাফটোন", icon: "⚪" },
+  { kind: "frame-thin", label: "পাতলা ফ্রেম", icon: "▫️" },
+  { kind: "frame-thick", label: "মোটা ফ্রেম", icon: "🔲" },
+  { kind: "duotone-blue", label: "ডুওটোন নীল", icon: "🟦" },
+  { kind: "duotone-pink", label: "ডুওটোন গোলাপি", icon: "🟪" },
+];
 
 function loadTemplates(): Template[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
