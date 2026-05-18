@@ -408,6 +408,12 @@ const AdminPhotocardBuilder = () => {
     setDoc((d) => ({ ...d, background: { ...d.background, type: "image", imageSrc: src } }));
   };
 
+  const addOverlay = (kind: OverlayKind) => {
+    const l = newOverlayLayer(kind, doc.width, doc.height);
+    setDoc((d) => ({ ...d, layers: [...d.layers, l] }));
+    setSelectedId(l.id);
+  };
+
   const exportPNG = async () => {
     if (!frameRef.current) return;
     toast({ title: "ছবি তৈরি হচ্ছে… (হাই-রেজ)" });
