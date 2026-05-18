@@ -496,6 +496,17 @@ const AdminPhotocardBuilder = () => {
               <ImageIcon size={14} /> ছবি আপলোড
               <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && addImageFromFile(e.target.files[0])} />
             </label>
+            <div className="pt-2 border-t border-border/40">
+              <p className="text-[10px] text-muted-foreground mb-1.5">✨ ওভারলে / ইফেক্ট</p>
+              <div className="grid grid-cols-2 gap-1">
+                {OVERLAY_PRESETS.map((p) => (
+                  <button key={p.kind} onClick={() => addOverlay(p.kind)}
+                    className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded bg-muted hover:bg-muted/70">
+                    <span>{p.icon}</span><span className="truncate">{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="glass-card-static p-3 space-y-2">
