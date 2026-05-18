@@ -9,7 +9,7 @@ import { BUILTIN_TEMPLATES } from "@/lib/photocardTemplates";
 
 type LayerBase = {
   id: string;
-  type: "text" | "image";
+  type: "text" | "image" | "overlay";
   x: number; y: number; w: number; h: number;
   rotation: number;
   opacity: number;
@@ -39,8 +39,35 @@ type ImageLayer = LayerBase & {
   filter: "none" | "grayscale" | "blur" | "sepia";
   glow?: boolean;
   glowColor?: string;
+  // Advanced editing
+  brightness?: number; // 0..200 (%)
+  contrast?: number;   // 0..200 (%)
+  saturate?: number;   // 0..200 (%)
+  hueRotate?: number;  // -180..180 deg
+  blurPx?: number;     // 0..20 px (separate from preset)
+  invert?: number;     // 0..100 (%)
+  vintage?: boolean;
 };
-type Layer = TextLayer | ImageLayer;
+type OverlayKind =
+  | "vignette"
+  | "grain"
+  | "scanlines"
+  | "lightleak-tl"
+  | "lightleak-br"
+  | "lensflare"
+  | "halftone"
+  | "frame-thin"
+  | "frame-thick"
+  | "duotone-blue"
+  | "duotone-pink";
+type OverlayLayer = LayerBase & {
+  type: "overlay";
+  kind: OverlayKind;
+  color: string;
+  intensity: number; // 0..100
+  blend: string; // CSS mix-blend-mode
+};
+type Layer = TextLayer | ImageLayer | OverlayLayer;
 
 type Background = {
   type: "color" | "gradient" | "image";
@@ -149,7 +176,104 @@ const newImageLayer = (src: string, w: number, h: number): ImageLayer => ({
   rotation: 0, opacity: 1,
   src, fit: "cover", radius: 24, filter: "none",
   glow: false, glowColor: "#22d3ee",
+  brightness: 100, contrast: 100, saturate: 100,
+  hueRotate: 0, blurPx: 0, invert: 0, vintage: false,
 });
+
+const newOverlayLayer = (kind: OverlayKind, w: number, h: number): OverlayLayer => ({
+  id: uid(), type: "overlay",
+  x: 0, y: 0, w, h, rotation: 0, opacity: 0.65,
+  kind, color: "#000000", intensity: 60, blend: "normal",
+});
+
+// Build CSS filter string for image layers
+const imageFilterCSS = (l: ImageLayer): string => {
+  const parts: string[] = [];
+  parts.push(`brightness(${l.brightness ?? 100}%)`);
+  parts.push(`contrast(${l.contrast ?? 100}%)`);
+  parts.push(`saturate(${l.saturate ?? 100}%)`);
+  if (l.hueRotate) parts.push(`hue-rotate(${l.hueRotate}deg)`);
+  if (l.invert) parts.push(`invert(${l.invert}%)`);
+  // Preset filter on top of base adjustments
+  if (l.filter === "grayscale") parts.push("grayscale(1)");
+  else if (l.filter === "sepia") parts.push("sepia(1)");
+  // Blur: preset blur + custom slider, additive
+  const blurTotal = (l.filter === "blur" ? 8 : 0) + (l.blurPx ?? 0);
+  if (blurTotal > 0) parts.push(`blur(${blurTotal}px)`);
+  if (l.vintage) parts.push("sepia(0.35) contrast(1.05) saturate(1.1)");
+  return parts.join(" ");
+};
+
+// Render overlay layer as a div with background based on kind
+const overlayStyle = (l: OverlayLayer): React.CSSProperties => {
+  const a = (l.intensity ?? 60) / 100;
+  const c = l.color || "#000000";
+  const base: React.CSSProperties = {
+    width: "100%", height: "100%",
+    mixBlendMode: l.blend as any,
+    pointerEvents: "none",
+  };
+  switch (l.kind) {
+    case "vignette":
+      return { ...base, background: `radial-gradient(ellipse at center, transparent 45%, ${c} 130%)`, opacity: a };
+    case "grain":
+      return {
+        ...base,
+        backgroundImage:
+          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        opacity: a * 0.85,
+        mixBlendMode: (l.blend === "normal" ? "overlay" : l.blend) as any,
+      };
+    case "scanlines":
+      return {
+        ...base,
+        backgroundImage: `repeating-linear-gradient(0deg, ${c} 0px, ${c} 1px, transparent 1px, transparent 3px)`,
+        opacity: a * 0.6,
+      };
+    case "lightleak-tl":
+      return { ...base, background: `radial-gradient(circle at 0% 0%, ${c} 0%, transparent 55%)`, opacity: a, mixBlendMode: "screen" };
+    case "lightleak-br":
+      return { ...base, background: `radial-gradient(circle at 100% 100%, ${c} 0%, transparent 55%)`, opacity: a, mixBlendMode: "screen" };
+    case "lensflare":
+      return {
+        ...base,
+        background: `radial-gradient(circle at 75% 25%, rgba(255,255,255,0.9) 0%, rgba(255,220,150,0.5) 8%, transparent 22%), radial-gradient(circle at 35% 65%, rgba(255,200,120,0.4) 0%, transparent 18%)`,
+        opacity: a,
+        mixBlendMode: "screen",
+      };
+    case "halftone":
+      return {
+        ...base,
+        backgroundImage: `radial-gradient(${c} 1px, transparent 1.5px)`,
+        backgroundSize: "6px 6px",
+        opacity: a * 0.5,
+      };
+    case "frame-thin":
+      return { ...base, boxShadow: `inset 0 0 0 ${Math.max(2, a * 8)}px ${c}`, opacity: 1 };
+    case "frame-thick":
+      return { ...base, boxShadow: `inset 0 0 0 ${Math.max(8, a * 28)}px ${c}`, opacity: 1 };
+    case "duotone-blue":
+      return { ...base, background: `linear-gradient(135deg, rgba(29,78,216,${a}), rgba(217,70,239,${a}))`, mixBlendMode: "color" };
+    case "duotone-pink":
+      return { ...base, background: `linear-gradient(135deg, rgba(244,63,94,${a}), rgba(251,146,60,${a}))`, mixBlendMode: "color" };
+    default:
+      return base;
+  }
+};
+
+const OVERLAY_PRESETS: { kind: OverlayKind; label: string; icon: string }[] = [
+  { kind: "vignette", label: "ভিনিয়েট", icon: "⚫" },
+  { kind: "grain", label: "গ্রেইন", icon: "✨" },
+  { kind: "scanlines", label: "স্ক্যানলাইন", icon: "📺" },
+  { kind: "lightleak-tl", label: "লাইট লিক ↖", icon: "💡" },
+  { kind: "lightleak-br", label: "লাইট লিক ↘", icon: "🌅" },
+  { kind: "lensflare", label: "লেন্স ফ্লেয়ার", icon: "🔆" },
+  { kind: "halftone", label: "হাফটোন", icon: "⚪" },
+  { kind: "frame-thin", label: "পাতলা ফ্রেম", icon: "▫️" },
+  { kind: "frame-thick", label: "মোটা ফ্রেম", icon: "🔲" },
+  { kind: "duotone-blue", label: "ডুওটোন নীল", icon: "🟦" },
+  { kind: "duotone-pink", label: "ডুওটোন গোলাপি", icon: "🟪" },
+];
 
 function loadTemplates(): Template[] {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch { return []; }
@@ -284,6 +408,12 @@ const AdminPhotocardBuilder = () => {
     setDoc((d) => ({ ...d, background: { ...d.background, type: "image", imageSrc: src } }));
   };
 
+  const addOverlay = (kind: OverlayKind) => {
+    const l = newOverlayLayer(kind, doc.width, doc.height);
+    setDoc((d) => ({ ...d, layers: [...d.layers, l] }));
+    setSelectedId(l.id);
+  };
+
   const exportPNG = async () => {
     if (!frameRef.current) return;
     toast({ title: "ছবি তৈরি হচ্ছে… (হাই-রেজ)" });
@@ -372,6 +502,17 @@ const AdminPhotocardBuilder = () => {
               <ImageIcon size={14} /> ছবি আপলোড
               <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && addImageFromFile(e.target.files[0])} />
             </label>
+            <div className="pt-2 border-t border-border/40">
+              <p className="text-[10px] text-muted-foreground mb-1.5">✨ ওভারলে / ইফেক্ট</p>
+              <div className="grid grid-cols-2 gap-1">
+                {OVERLAY_PRESETS.map((p) => (
+                  <button key={p.kind} onClick={() => addOverlay(p.kind)}
+                    className="flex items-center gap-1 px-2 py-1.5 text-[10px] rounded bg-muted hover:bg-muted/70">
+                    <span>{p.icon}</span><span className="truncate">{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="glass-card-static p-3 space-y-2">
@@ -521,7 +662,7 @@ const AdminPhotocardBuilder = () => {
                           {(l as TextLayer).text}
                         </div>
                       </div>
-                    ) : (
+                    ) : l.type === "image" ? (
                       <img
                         src={(l as ImageLayer).src}
                         alt=""
@@ -530,16 +671,15 @@ const AdminPhotocardBuilder = () => {
                           width: "100%", height: "100%",
                           objectFit: (l as ImageLayer).fit,
                           borderRadius: (l as ImageLayer).radius,
-                          filter:
-                            (l as ImageLayer).filter === "grayscale" ? "grayscale(1)" :
-                            (l as ImageLayer).filter === "blur" ? "blur(8px)" :
-                            (l as ImageLayer).filter === "sepia" ? "sepia(1)" : "none",
+                          filter: imageFilterCSS(l as ImageLayer),
                           boxShadow: (l as ImageLayer).glow
                             ? `0 0 60px 6px ${(l as ImageLayer).glowColor || "#22d3ee"}`
                             : "none",
                           pointerEvents: "none",
                         }}
                       />
+                    ) : (
+                      <div style={overlayStyle(l as OverlayLayer)} />
                     )}
                     {selectedId === l.id && !l.locked && (
                       <>
@@ -614,6 +754,7 @@ const AdminPhotocardBuilder = () => {
 
                 {selected.type === "text" && <TextProps layer={selected as TextLayer} update={(p) => updateLayer(selected.id, p)} />}
                 {selected.type === "image" && <ImageProps layer={selected as ImageLayer} update={(p) => updateLayer(selected.id, p)} />}
+                {selected.type === "overlay" && <OverlayProps layer={selected as OverlayLayer} update={(p) => updateLayer(selected.id, p)} />}
               </div>
             )}
           </div>
@@ -770,6 +911,50 @@ const ImageProps = ({ layer, update }: { layer: ImageLayer; update: (p: Partial<
         className={`flex-1 text-[10px] py-1.5 rounded ${layer.glow ? "bg-primary text-primary-foreground" : "bg-muted"}`}>✨ গ্লো</button>
       <input type="color" value={layer.glowColor || "#22d3ee"} onChange={(e) => update({ glowColor: e.target.value })} className="h-8 w-12 rounded cursor-pointer" />
     </div>
+    <div className="pt-2 mt-1 border-t border-border/50 space-y-2">
+      <p className="text-[10px] font-bold text-muted-foreground">🎛️ অ্যাডভান্স অ্যাডজাস্টমেন্ট</p>
+      <SliderRow label="ব্রাইটনেস" value={layer.brightness ?? 100} min={0} max={200} onChange={(v) => update({ brightness: v })} />
+      <SliderRow label="কন্ট্রাস্ট" value={layer.contrast ?? 100} min={0} max={200} onChange={(v) => update({ contrast: v })} />
+      <SliderRow label="স্যাচুরেশন" value={layer.saturate ?? 100} min={0} max={200} onChange={(v) => update({ saturate: v })} />
+      <SliderRow label="হিউ" value={layer.hueRotate ?? 0} min={-180} max={180} onChange={(v) => update({ hueRotate: v })} unit="°" />
+      <SliderRow label="ব্লার" value={layer.blurPx ?? 0} min={0} max={20} onChange={(v) => update({ blurPx: v })} unit="px" />
+      <SliderRow label="ইনভার্ট" value={layer.invert ?? 0} min={0} max={100} onChange={(v) => update({ invert: v })} unit="%" />
+      <button onClick={() => update({ vintage: !layer.vintage })}
+        className={`w-full text-[10px] py-1.5 rounded ${layer.vintage ? "bg-primary text-primary-foreground" : "bg-muted"}`}>📷 ভিনটেজ {layer.vintage ? "✓" : ""}</button>
+      <button onClick={() => update({ brightness: 100, contrast: 100, saturate: 100, hueRotate: 0, blurPx: 0, invert: 0, vintage: false, filter: "none" })}
+        className="w-full text-[10px] py-1 rounded bg-muted hover:bg-muted/70">🔄 রিসেট</button>
+    </div>
+  </div>
+);
+
+const SliderRow = ({ label, value, min, max, onChange, unit = "" }: { label: string; value: number; min: number; max: number; onChange: (v: number) => void; unit?: string }) => (
+  <div>
+    <div className="flex justify-between text-[10px] text-muted-foreground">
+      <span>{label}</span><span>{Math.round(value)}{unit}</span>
+    </div>
+    <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(+e.target.value)} className="w-full" />
+  </div>
+);
+
+const OverlayProps = ({ layer, update }: { layer: OverlayLayer; update: (p: Partial<OverlayLayer>) => void }) => (
+  <div className="space-y-2 pt-2 border-t border-border/50">
+    <p className="text-[10px] font-bold text-muted-foreground">✨ ওভারলে: {OVERLAY_PRESETS.find((p) => p.kind === layer.kind)?.label}</p>
+    <select value={layer.kind} onChange={(e) => update({ kind: e.target.value as OverlayKind })}
+      className="w-full text-xs px-2 py-1.5 rounded bg-background border border-border">
+      {OVERLAY_PRESETS.map((p) => <option key={p.kind} value={p.kind}>{p.icon} {p.label}</option>)}
+    </select>
+    <SliderRow label="ইনটেনসিটি" value={layer.intensity} min={0} max={100} onChange={(v) => update({ intensity: v })} unit="%" />
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">কালার</span>
+      <input type="color" value={layer.color} onChange={(e) => update({ color: e.target.value })} className="w-full h-8 rounded cursor-pointer" />
+    </label>
+    <label className="block">
+      <span className="text-[10px] text-muted-foreground">ব্লেন্ড মোড</span>
+      <select value={layer.blend} onChange={(e) => update({ blend: e.target.value })}
+        className="w-full text-xs px-2 py-1.5 rounded bg-background border border-border">
+        {["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn", "hard-light", "soft-light", "difference", "exclusion", "hue", "saturation", "color", "luminosity"].map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </label>
   </div>
 );
 

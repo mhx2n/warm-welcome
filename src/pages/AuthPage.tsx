@@ -21,18 +21,32 @@ const AuthPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
+    // Restrict to real Gmail addresses only (no aliases / fake providers)
+    const normalized = email.trim().toLowerCase();
+    const gmailRegex = /^[a-z0-9](\.?[a-z0-9_-]){4,}@gmail\.com$/;
+    if (!gmailRegex.test(normalized)) {
+      toast({
+        title: "শুধু Gmail অনুমোদিত",
+        description: "অনুগ্রহ করে একটি বৈধ @gmail.com ঠিকানা ব্যবহার করুন।",
+        variant: "destructive",
+      });
+      return;
+    }
     setLoading(true);
     try {
       if (isSignUp) {
-        const result = await signUp(email, password, fullName);
+        const result = await signUp(normalized, password, fullName);
         if (!result?.session) {
-          toast({ title: "অ্যাকাউন্ট তৈরি হয়েছে ✅", description: "এখন লগইন করুন।" });
+          toast({
+            title: "ভেরিফিকেশন ইমেইল পাঠানো হয়েছে 📧",
+            description: "আপনার Gmail-এ গিয়ে ভেরিফাই লিংকে ক্লিক করুন, তারপর লগইন করুন।",
+          });
           setIsSignUp(false);
           return;
         }
         toast({ title: "স্বাগতম! ✅" });
       } else {
-        await signIn(email, password);
+        await signIn(normalized, password);
       }
       navigate("/", { replace: true });
     } catch (err: any) {
@@ -77,7 +91,7 @@ const AuthPage = () => {
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
             <input
               type="email"
-              placeholder="ইমেইল"
+              placeholder="আপনার Gmail (যেমন: name@gmail.com)"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full glass-strong rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
