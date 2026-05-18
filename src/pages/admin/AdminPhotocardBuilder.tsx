@@ -9,7 +9,7 @@ import { BUILTIN_TEMPLATES } from "@/lib/photocardTemplates";
 
 type LayerBase = {
   id: string;
-  type: "text" | "image";
+  type: "text" | "image" | "overlay";
   x: number; y: number; w: number; h: number;
   rotation: number;
   opacity: number;
