@@ -754,6 +754,7 @@ const AdminPhotocardBuilder = () => {
 
                 {selected.type === "text" && <TextProps layer={selected as TextLayer} update={(p) => updateLayer(selected.id, p)} />}
                 {selected.type === "image" && <ImageProps layer={selected as ImageLayer} update={(p) => updateLayer(selected.id, p)} />}
+                {selected.type === "overlay" && <OverlayProps layer={selected as OverlayLayer} update={(p) => updateLayer(selected.id, p)} />}
               </div>
             )}
           </div>
